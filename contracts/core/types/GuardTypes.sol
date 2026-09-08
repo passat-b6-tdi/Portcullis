@@ -2,6 +2,7 @@
 pragma solidity 0.8.36;
 
 import { IVolumeVerdictOracle } from "../interfaces/IVolumeVerdictOracle.sol";
+import { IPreSettlementPolicy } from "../interfaces/IPreSettlementPolicy.sol";
 
 struct SettlementMessage {
     bytes32 srcId; // source identifier (e.g. namehash of an org subname)
@@ -20,7 +21,8 @@ enum TripReason {
     REPLAY,
     NONCE_GAP,
     RATE_LIMIT,
-    VOLUME_SPIKE
+    VOLUME_SPIKE,
+    POLICY
 }
 
 struct GuardState {
@@ -44,4 +46,6 @@ struct GuardState {
     uint256 spikeFactorBps; // 30_000 => allow up to 3.0x baseline
     uint256 observations;
     uint256 warmup; // no spike check until observations >= warmup
+    // confidential pre-settlement policy (CRE); address(0) => detector skipped
+    IPreSettlementPolicy policy;
 }

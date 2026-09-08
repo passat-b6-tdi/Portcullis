@@ -4,6 +4,7 @@ pragma solidity 0.8.36;
 import { SettlementMessage, GuardState, TripReason } from "./types/GuardTypes.sol";
 import { IIdentityRegistry } from "./interfaces/IIdentityRegistry.sol";
 import { IVolumeVerdictOracle } from "./interfaces/IVolumeVerdictOracle.sol";
+import { IPreSettlementPolicy } from "./interfaces/IPreSettlementPolicy.sol";
 import { PortcullisChecks } from "./PortcullisChecks.sol";
 
 contract PortcullisGuard {
@@ -21,6 +22,7 @@ contract PortcullisGuard {
     event TokenAllowed(address indexed token, bool allowed);
     event RateSet(uint256 capacity, uint256 refillPerSec);
     event VolumePolicySet(address indexed oracle, uint256 spikeFactorBps, uint256 warmup);
+    event PolicySet(address indexed policy);
 
     IIdentityRegistry public immutable identity;
 
@@ -85,6 +87,11 @@ contract PortcullisGuard {
         _s.spikeFactorBps = spikeFactorBps;
         _s.warmup = warmup;
         emit VolumePolicySet(address(oracle), spikeFactorBps, warmup);
+    }
+
+    function setPolicy(IPreSettlementPolicy policy_) external onlyGuardian {
+        _s.policy = policy_;
+        emit PolicySet(address(policy_));
     }
 
     function _trip(TripReason reason, bytes32 messageId) internal {

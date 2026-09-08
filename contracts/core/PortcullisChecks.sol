@@ -10,11 +10,14 @@ library PortcullisChecks {
     uint8 internal constant BIT_REPLAY = 1 << 2;
     uint8 internal constant BIT_RATE = 1 << 3;
     uint8 internal constant BIT_VOLUME = 1 << 4;
+    uint8 internal constant BIT_POLICY = 1 << 5;
 
-    uint8 internal constant PASS_MASK = BIT_BINDING | BIT_BOUNDS | BIT_REPLAY | BIT_RATE | BIT_VOLUME;
+    uint8 internal constant PASS_MASK = BIT_BINDING | BIT_BOUNDS | BIT_REPLAY | BIT_RATE | BIT_VOLUME | BIT_POLICY;
+
+    uint8 internal constant POLICY_ALLOW = 0;
 
     uint256 private constant BPS = 10_000;
-    uint256 private constant EMA_ALPHA = 8; // baseline' = (7*baseline + value) / 8
+    uint256 private constant EMA_ALPHA = 8;
 
     // view-only: runs all detectors in order, never writes
     function evaluate(
@@ -23,6 +26,11 @@ library PortcullisChecks {
         IIdentityRegistry identity,
         bytes calldata proof
     ) internal view returns (bool ok, TripReason reason) {
+        if (address(s.policy) != address(0)) {
+            (uint8 verdict,) = s.policy.evaluate(keccak256(abi.encode(m)), proof);
+            if (verdict != POLICY_ALLOW) return (false, TripReason.POLICY); // 0. confidential policy
+        }
+
         address authority = identity.resolve(m.srcId);
         if (m.sender == address(0) || authority == address(0) || authority != m.sender) {
             return (false, TripReason.BINDING); // 1. binding
