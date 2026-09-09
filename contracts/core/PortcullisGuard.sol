@@ -2,7 +2,7 @@
 pragma solidity 0.8.36;
 
 import { OwnableRoles } from "solady/auth/OwnableRoles.sol";
-import { SettlementMessage, GuardState, TripReason } from "./types/GuardTypes.sol";
+import { SettlementMessage, GuardState, TripReason, VolumeStat } from "./types/GuardTypes.sol";
 import { IIdentityRegistry } from "./interfaces/IIdentityRegistry.sol";
 import { IVolumeVerdictOracle } from "./interfaces/IVolumeVerdictOracle.sol";
 import { IPreSettlementPolicy } from "./interfaces/IPreSettlementPolicy.sol";
@@ -31,7 +31,7 @@ contract PortcullisGuard is OwnableRoles {
         uint8 detectorMask
     );
     event BoundsSet(uint256 minValue, uint256 maxValue);
-    event TokenAllowed(address indexed token, bool allowed);
+    event TokenAllowed(address indexed token, bool allowed, uint8 decimals);
     event RateSet(uint256 capacity, uint256 refillPerSec);
     event VolumePolicySet(address indexed oracle, uint256 spikeFactorBps, uint256 warmup);
     event PolicySet(address indexed policy);
@@ -130,9 +130,10 @@ contract PortcullisGuard is OwnableRoles {
         emit BoundsSet(minValue, maxValue);
     }
 
-    function setAllowedToken(address token, bool allowed) external onlyRoles(GUARDIAN_ROLE) {
-        _s.allowedToken[token] = allowed;
-        emit TokenAllowed(token, allowed);
+    function setAllowedToken(address token, bool allowed, uint8 decimals) external onlyRoles(GUARDIAN_ROLE) {
+        require(decimals <= 18, Portcullis__BadConfig());
+        _s.tokenScale[token] = allowed ? 10 ** (18 - uint256(decimals)) : 0;
+        emit TokenAllowed(token, allowed, decimals);
     }
 
     function setRate(uint256 capacity, uint256 refillPerSec) external onlyRoles(GUARDIAN_ROLE) {
@@ -179,7 +180,11 @@ contract PortcullisGuard is OwnableRoles {
     }
 
     function allowedToken(address token) external view returns (bool) {
-        return _s.allowedToken[token];
+        return _s.tokenScale[token] != 0;
+    }
+
+    function tokenScale(address token) external view returns (uint256) {
+        return _s.tokenScale[token];
     }
 
     function seen(bytes32 messageId) external view returns (bool) {
@@ -198,12 +203,13 @@ contract PortcullisGuard is OwnableRoles {
         return (_s.rateCapacity, _s.rateRefillPerSec, _s.tokens, _s.lastRefill);
     }
 
-    function volumeState()
-        external
-        view
-        returns (address oracle, uint256 baseline, uint256 spikeFactorBps, uint256 observations, uint256 warmup)
-    {
-        return (address(_s.volumeOracle), _s.baseline, _s.spikeFactorBps, _s.observations, _s.warmup);
+    function volumeState() external view returns (address oracle, uint256 spikeFactorBps, uint256 warmup) {
+        return (address(_s.volumeOracle), _s.spikeFactorBps, _s.warmup);
+    }
+
+    function volumeStatOf(bytes32 srcId) external view returns (uint256 baseline, uint256 observations) {
+        VolumeStat storage v = _s.volume[srcId];
+        return (v.baseline, v.observations);
     }
 
     function _latching(TripReason reason) private pure returns (bool) {
