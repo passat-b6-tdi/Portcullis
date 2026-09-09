@@ -196,6 +196,31 @@ contract PortcullisGuardTest is Test {
         assertFalse(guard.seen(keccak256("b")));
     }
 
+    function test_transferGuardian_movesRole() public {
+        vm.prank(guardianAddr);
+        guard.transferGuardian(stranger);
+        assertEq(guard.guardian(), stranger);
+
+        vm.prank(guardianAddr);
+        vm.expectRevert(PortcullisGuard.Portcullis__NotGuardian.selector);
+        guard.clear();
+
+        vm.prank(stranger);
+        guard.clear();
+    }
+
+    function test_transferGuardian_onlyGuardian() public {
+        vm.prank(stranger);
+        vm.expectRevert(PortcullisGuard.Portcullis__NotGuardian.selector);
+        guard.transferGuardian(stranger);
+    }
+
+    function test_transferGuardian_rejectsZero() public {
+        vm.prank(guardianAddr);
+        vm.expectRevert(PortcullisGuard.Portcullis__ZeroAddress.selector);
+        guard.transferGuardian(address(0));
+    }
+
     function _expectTrip(TripReason reason, bytes32 messageId) internal {
         vm.expectEmit(true, true, false, true, address(guard));
         emit SentinelTripped(reason, messageId, address(this));
