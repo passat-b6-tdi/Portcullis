@@ -6,12 +6,11 @@ import { IPreSettlementPolicy } from "../interfaces/IPreSettlementPolicy.sol";
 
 struct SettlementMessage {
     bytes32 srcId; // source identifier (e.g. namehash of an org subname)
-    address sender; // claimed origin authority; bound to the identity source
     address recipient; // beneficiary on this chain
     address token; // settlement asset on this chain
     uint256 value; // settlement amount
     uint256 appNonce; // must equal lastNonce[srcId] + 1
-    bytes32 messageId; // globally unique; replay key
+    uint256 deadline; // unix seconds; message rejected once passed
 }
 
 enum TripReason {
@@ -22,11 +21,14 @@ enum TripReason {
     NONCE_GAP,
     RATE_LIMIT,
     VOLUME_SPIKE,
-    POLICY
+    POLICY,
+    EXPIRED,
+    POLICY_HOLD
 }
 
 struct GuardState {
     bool paused;
+    mapping(bytes32 => bool) enrolled; // srcId => guardian-approved source
     // bounds
     uint256 minValue;
     uint256 maxValue;
