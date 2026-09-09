@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { SettlementMessage, GuardState, TripReason } from "./types/GuardTypes.sol";
 import { IIdentityRegistry } from "./interfaces/IIdentityRegistry.sol";
 import { IVolumeVerdictOracle } from "./interfaces/IVolumeVerdictOracle.sol";
 import { IPreSettlementPolicy } from "./interfaces/IPreSettlementPolicy.sol";
 import { PortcullisChecks } from "./PortcullisChecks.sol";
 
-contract PortcullisGuard {
+contract PortcullisGuard is AccessControl {
     using PortcullisChecks for GuardState;
 
     error Portcullis__Paused();
@@ -25,19 +26,16 @@ contract PortcullisGuard {
     event PolicySet(address indexed policy);
     event GuardianTransferred(address indexed from, address indexed to);
 
+    bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
+
     IIdentityRegistry public immutable identity;
 
     GuardState internal _s;
 
-    modifier onlyGuardian() {
-        require(msg.sender == _s.guardian, Portcullis__NotGuardian());
-        _;
-    }
-
     constructor(address guardian_, IIdentityRegistry identity_) {
         require(guardian_ != address(0), Portcullis__ZeroAddress());
         require(address(identity_) != address(0), Portcullis__ZeroAddress());
-        _s.guardian = guardian_;
+        _grantRole(GUARDIAN_ROLE, guardian_);
         identity = identity_;
     }
 
@@ -56,30 +54,30 @@ contract PortcullisGuard {
         return true;
     }
 
-    function clear() external onlyGuardian {
+    function clear() external onlyRole(GUARDIAN_ROLE) {
         _s.paused = false;
         emit SentinelCleared(msg.sender);
     }
 
-    function transferGuardian(address to) external onlyGuardian {
+    function transferGuardian(address to) external onlyRole(GUARDIAN_ROLE) {
         require(to != address(0), Portcullis__ZeroAddress());
         emit GuardianTransferred(_s.guardian, to);
         _s.guardian = to;
     }
 
-    function setBounds(uint256 minValue, uint256 maxValue) external onlyGuardian {
+    function setBounds(uint256 minValue, uint256 maxValue) external onlyRole(GUARDIAN_ROLE) {
         require(minValue < maxValue, Portcullis__BadConfig());
         _s.minValue = minValue;
         _s.maxValue = maxValue;
         emit BoundsSet(minValue, maxValue);
     }
 
-    function setAllowedToken(address token, bool allowed) external onlyGuardian {
+    function setAllowedToken(address token, bool allowed) external onlyRole(GUARDIAN_ROLE) {
         _s.allowedToken[token] = allowed;
         emit TokenAllowed(token, allowed);
     }
 
-    function setRate(uint256 capacity, uint256 refillPerSec) external onlyGuardian {
+    function setRate(uint256 capacity, uint256 refillPerSec) external onlyRole(GUARDIAN_ROLE) {
         _s.rateCapacity = capacity;
         _s.rateRefillPerSec = refillPerSec;
         _s.tokens = capacity;
@@ -89,7 +87,7 @@ contract PortcullisGuard {
 
     function setVolumePolicy(IVolumeVerdictOracle oracle, uint256 spikeFactorBps, uint256 warmup)
         external
-        onlyGuardian
+        onlyRole(GUARDIAN_ROLE)
     {
         _s.volumeOracle = oracle;
         _s.spikeFactorBps = spikeFactorBps;
@@ -97,14 +95,9 @@ contract PortcullisGuard {
         emit VolumePolicySet(address(oracle), spikeFactorBps, warmup);
     }
 
-    function setPolicy(IPreSettlementPolicy policy_) external onlyGuardian {
+    function setPolicy(IPreSettlementPolicy policy_) external onlyRole(GUARDIAN_ROLE) {
         _s.policy = policy_;
         emit PolicySet(address(policy_));
-    }
-
-    function _trip(TripReason reason, bytes32 messageId) internal {
-        _s.paused = true;
-        emit SentinelTripped(reason, messageId, msg.sender);
     }
 
     function paused() external view returns (bool) {
@@ -145,5 +138,10 @@ contract PortcullisGuard {
         returns (address oracle, uint256 baseline, uint256 spikeFactorBps, uint256 observations, uint256 warmup)
     {
         return (address(_s.volumeOracle), _s.baseline, _s.spikeFactorBps, _s.observations, _s.warmup);
+    }
+
+    function _trip(TripReason reason, bytes32 messageId) internal {
+        _s.paused = true;
+        emit SentinelTripped(reason, messageId, msg.sender);
     }
 }

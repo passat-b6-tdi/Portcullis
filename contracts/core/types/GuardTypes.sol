@@ -27,7 +27,6 @@ enum TripReason {
 
 struct GuardState {
     bool paused;
-    address guardian;
     // bounds
     uint256 minValue;
     uint256 maxValue;
