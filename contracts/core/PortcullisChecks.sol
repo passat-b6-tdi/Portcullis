@@ -2,7 +2,7 @@
 pragma solidity 0.8.36;
 
 import { ECDSA } from "solady/utils/ECDSA.sol";
-import { SettlementMessage, GuardState, TripReason } from "./types/GuardTypes.sol";
+import { SettlementMessage, GuardState, TripReason, VolumeStat } from "./types/GuardTypes.sol";
 import { IIdentityRegistry } from "./interfaces/IIdentityRegistry.sol";
 
 library PortcullisChecks {
@@ -26,6 +26,17 @@ library PortcullisChecks {
         return keccak256(abi.encode(block.chainid, address(this), m));
     }
 
+    function _normalise(GuardState storage s, SettlementMessage calldata m)
+        private
+        view
+        returns (uint256 norm, bool ok)
+    {
+        uint256 scale = s.tokenScale[m.token];
+        if (scale == 0 || m.value > type(uint256).max / scale) return (0, false);
+        return (m.value * scale, true);
+    }
+
+    // view-only: runs all detectors in order, never writes
     function evaluate(
         GuardState storage s,
         SettlementMessage calldata m,
@@ -36,7 +47,7 @@ library PortcullisChecks {
 
         bytes32 mid = digest(m);
 
-        // 1. binding
+        // 1. binding: srcId enrolled by a guardian AND the message signed by its authority
         if (!s.enrolled[m.srcId]) return (false, TripReason.BINDING);
         address authority = identity.resolve(m.srcId);
         if (authority == address(0)) return (false, TripReason.BINDING);
@@ -44,11 +55,13 @@ library PortcullisChecks {
             return (false, TripReason.BINDING);
         }
 
-        if (m.value < s.minValue || m.value > s.maxValue || !s.allowedToken[m.token] || m.recipient == address(0)) {
-            return (false, TripReason.BOUNDS); // 2. bounds
+        // 2. bounds: compared in normalised 18 decimal units
+        (uint256 norm, bool scaled) = _normalise(s, m);
+        if (!scaled || norm < s.minValue || norm > s.maxValue || m.recipient == address(0)) {
+            return (false, TripReason.BOUNDS);
         }
 
-        // 3. confidential policy (CRE)
+        // 3. confidential policy (CRE): only an explicit DENY latches the breaker
         if (address(s.policy) != address(0)) {
             (uint8 verdict,) = s.policy.evaluate(mid, proof);
             if (verdict == POLICY_DENY) return (false, TripReason.POLICY);
@@ -58,30 +71,33 @@ library PortcullisChecks {
         if (s.seen[mid]) return (false, TripReason.REPLAY); // 4. replay
         if (m.appNonce != s.lastNonce[m.srcId] + 1) return (false, TripReason.NONCE_GAP); // 4. ordering
 
-        if (s.rateCapacity != 0 && m.value > _available(s)) return (false, TripReason.RATE_LIMIT); // 5. rate
+        if (s.rateCapacity != 0 && norm > _available(s)) return (false, TripReason.RATE_LIMIT); // 5. rate
 
-        if (!_volumeOk(s, m, mid, proof)) return (false, TripReason.VOLUME_SPIKE); // 6. volume
+        if (!_volumeOk(s, m, norm, mid, proof)) return (false, TripReason.VOLUME_SPIKE); // 6. volume
 
         return (true, TripReason.NONE);
     }
 
     function commit(GuardState storage s, SettlementMessage calldata m) external {
+        (uint256 norm,) = _normalise(s, m);
+
         s.seen[digest(m)] = true;
         s.lastNonce[m.srcId] = m.appNonce;
 
         if (s.rateCapacity != 0) {
-            s.tokens = _available(s) - m.value; // _available is stable within the block
+            s.tokens = _available(s) - norm; // _available is stable within the block
             s.lastRefill = block.timestamp;
         }
 
         if (address(s.volumeOracle) == address(0) && s.spikeFactorBps != 0) {
-            uint256 n = s.observations;
+            VolumeStat storage v = s.volume[m.srcId];
+            uint256 n = v.observations;
             if (n < s.warmup) {
-                s.baseline = (s.baseline * n + m.value) / (n + 1); // running mean during warmup
+                v.baseline = (v.baseline * n + norm) / (n + 1); // running mean during warmup
             } else {
-                s.baseline = (s.baseline * (EMA_ALPHA - 1) + m.value) / EMA_ALPHA;
+                v.baseline = (v.baseline * (EMA_ALPHA - 1) + norm) / EMA_ALPHA;
             }
-            s.observations = n + 1;
+            v.observations = n + 1;
         }
     }
 
@@ -90,15 +106,19 @@ library PortcullisChecks {
         return refilled > s.rateCapacity ? s.rateCapacity : refilled; // capped at capacity
     }
 
-    function _volumeOk(GuardState storage s, SettlementMessage calldata m, bytes32 mid, bytes calldata proof)
-        private
-        view
-        returns (bool)
-    {
+    function _volumeOk(
+        GuardState storage s,
+        SettlementMessage calldata m,
+        uint256 norm,
+        bytes32 mid,
+        bytes calldata proof
+    ) private view returns (bool) {
         if (address(s.volumeOracle) != address(0)) {
             return s.volumeOracle.verify(mid, proof); // baseline stays private
         }
-        if (s.spikeFactorBps == 0 || s.baseline == 0 || s.observations < s.warmup) return true;
-        return m.value <= s.baseline * s.spikeFactorBps / BPS;
+        if (s.spikeFactorBps == 0) return true;
+        VolumeStat storage v = s.volume[m.srcId];
+        if (v.baseline == 0 || v.observations < s.warmup) return true;
+        return norm <= v.baseline * s.spikeFactorBps / BPS;
     }
 }
