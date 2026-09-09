@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
+import { ECDSA } from "solady/utils/ECDSA.sol";
 import { SettlementMessage, GuardState, TripReason } from "./types/GuardTypes.sol";
 import { IIdentityRegistry } from "./interfaces/IIdentityRegistry.sol";
 
@@ -14,10 +15,16 @@ library PortcullisChecks {
 
     uint8 internal constant PASS_MASK = BIT_BINDING | BIT_BOUNDS | BIT_REPLAY | BIT_RATE | BIT_VOLUME | BIT_POLICY;
 
-    uint8 internal constant POLICY_ALLOW = 1; // CRE verdict codes: 1 ALLOW, 2 DENY, 3 REVIEW, 0 none
+    // CRE verdict codes: 1 ALLOW, 2 DENY, 3 REVIEW, 0 none
+    uint8 internal constant POLICY_ALLOW = 1;
+    uint8 internal constant POLICY_DENY = 2;
 
     uint256 private constant BPS = 10_000;
     uint256 private constant EMA_ALPHA = 8;
+
+    function digest(SettlementMessage calldata m) internal view returns (bytes32) {
+        return keccak256(abi.encode(block.chainid, address(this), m));
+    }
 
     // view-only: runs all detectors in order, never writes
     function evaluate(
@@ -26,33 +33,41 @@ library PortcullisChecks {
         IIdentityRegistry identity,
         bytes calldata proof
     ) external view returns (bool ok, TripReason reason) {
-        if (address(s.policy) != address(0)) {
-            (uint8 verdict,) = s.policy.evaluate(keccak256(abi.encode(m)), proof);
-            if (verdict != POLICY_ALLOW) return (false, TripReason.POLICY); // 0. confidential policy
-        }
+        if (block.timestamp > m.deadline) return (false, TripReason.EXPIRED); // 0. freshness
 
+        bytes32 mid = digest(m);
+
+        // 1. binding
+        if (!s.enrolled[m.srcId]) return (false, TripReason.BINDING);
         address authority = identity.resolve(m.srcId);
-        if (m.sender == address(0) || authority == address(0) || authority != m.sender) {
-            return (false, TripReason.BINDING); // 1. binding
+        if (authority == address(0)) return (false, TripReason.BINDING);
+        if (ECDSA.tryRecoverCalldata(ECDSA.toEthSignedMessageHash(mid), proof) != authority) {
+            return (false, TripReason.BINDING);
         }
 
         if (m.value < s.minValue || m.value > s.maxValue || !s.allowedToken[m.token] || m.recipient == address(0)) {
             return (false, TripReason.BOUNDS); // 2. bounds
         }
 
-        if (s.seen[m.messageId]) return (false, TripReason.REPLAY); // 3. replay
-        if (m.appNonce != s.lastNonce[m.srcId] + 1) return (false, TripReason.NONCE_GAP); // 3. ordering
+        // 3. confidential policy (CRE)
+        if (address(s.policy) != address(0)) {
+            (uint8 verdict,) = s.policy.evaluate(mid, proof);
+            if (verdict == POLICY_DENY) return (false, TripReason.POLICY);
+            if (verdict != POLICY_ALLOW) return (false, TripReason.POLICY_HOLD);
+        }
 
-        if (s.rateCapacity != 0 && m.value > _available(s)) return (false, TripReason.RATE_LIMIT); // 4. rate
+        if (s.seen[mid]) return (false, TripReason.REPLAY); // 4. replay
+        if (m.appNonce != s.lastNonce[m.srcId] + 1) return (false, TripReason.NONCE_GAP); // 4. ordering
 
-        if (!_volumeOk(s, m, proof)) return (false, TripReason.VOLUME_SPIKE); // 5. volume
+        if (s.rateCapacity != 0 && m.value > _available(s)) return (false, TripReason.RATE_LIMIT); // 5. rate
+
+        if (!_volumeOk(s, m, mid, proof)) return (false, TripReason.VOLUME_SPIKE); // 6. volume
 
         return (true, TripReason.NONE);
     }
 
-    // called by the guard only after evaluate returns ok; no external calls
     function commit(GuardState storage s, SettlementMessage calldata m) external {
-        s.seen[m.messageId] = true;
+        s.seen[digest(m)] = true;
         s.lastNonce[m.srcId] = m.appNonce;
 
         if (s.rateCapacity != 0) {
@@ -76,13 +91,13 @@ library PortcullisChecks {
         return refilled > s.rateCapacity ? s.rateCapacity : refilled; // capped at capacity
     }
 
-    function _volumeOk(GuardState storage s, SettlementMessage calldata m, bytes calldata proof)
+    function _volumeOk(GuardState storage s, SettlementMessage calldata m, bytes32 mid, bytes calldata proof)
         private
         view
         returns (bool)
     {
         if (address(s.volumeOracle) != address(0)) {
-            return s.volumeOracle.verify(keccak256(abi.encode(m)), proof); // baseline stays private
+            return s.volumeOracle.verify(mid, proof); // baseline stays private
         }
         if (s.spikeFactorBps == 0 || s.baseline == 0 || s.observations < s.warmup) return true;
         return m.value <= s.baseline * s.spikeFactorBps / BPS;
