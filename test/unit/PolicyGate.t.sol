@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
-import { Test } from "forge-std/Test.sol";
 import { Ownable } from "solady/auth/Ownable.sol";
 import { PortcullisGuard } from "../../contracts/core/PortcullisGuard.sol";
 import { IPreSettlementPolicy } from "../../contracts/core/interfaces/IPreSettlementPolicy.sol";
 import { SettlementMessage, TripReason } from "../../contracts/core/types/GuardTypes.sol";
 import { MockIdentityRegistry } from "../mocks/MockIdentityRegistry.sol";
 import { MockPolicyOracle } from "../mocks/MockPolicyOracle.sol";
+import { GuardScenario } from "../util/GuardScenario.sol";
 
-contract PolicyGateTest is Test {
+contract PolicyGateTest is GuardScenario {
     uint8 internal constant ALLOW = 1;
     uint8 internal constant DENY = 2;
     uint8 internal constant MANUAL_REVIEW = 3;
@@ -19,10 +19,8 @@ contract PolicyGateTest is Test {
     MockPolicyOracle internal policy;
 
     address internal guardianAddr = makeAddr("guardian");
-    address internal sender = makeAddr("sender");
     address internal recipient = makeAddr("recipient");
     address internal token = makeAddr("token");
-    address internal attacker = makeAddr("attacker");
 
     bytes32 internal constant SRC = keccak256("src");
 
@@ -30,20 +28,31 @@ contract PolicyGateTest is Test {
 
     function setUp() public {
         identity = new MockIdentityRegistry();
-        identity.setAuthority(SRC, sender);
+        identity.setAuthority(SRC, authority);
         guard = new PortcullisGuard(guardianAddr, guardianAddr, address(identity));
         policy = new MockPolicyOracle();
 
         vm.startPrank(guardianAddr);
         guard.setBounds(1 ether, 1000 ether);
-        guard.setAllowedToken(token, true);
+        guard.setAllowedToken(token, true, 18);
+        guard.setEnrolled(SRC, true);
+        guard.setAdapter(address(this), true);
         vm.stopPrank();
     }
 
-    function _msg(uint256 value, uint256 nonce, bytes32 id) internal view returns (SettlementMessage memory) {
+    function _msg(uint256 value, uint256 nonce) internal view returns (SettlementMessage memory) {
         return SettlementMessage({
-            srcId: SRC, sender: sender, recipient: recipient, token: token, value: value, appNonce: nonce, messageId: id
+            srcId: SRC,
+            recipient: recipient,
+            token: token,
+            value: value,
+            appNonce: nonce,
+            deadline: block.timestamp + 1 days
         });
+    }
+
+    function _inspect(SettlementMessage memory m) internal returns (bool) {
+        return guard.inspect(m, _sign(guard, m));
     }
 
     function _enable() internal {
@@ -52,7 +61,7 @@ contract PolicyGateTest is Test {
     }
 
     function test_unset_detectorSkipped() public {
-        assertTrue(guard.inspect(_msg(100 ether, 1, keccak256("m")), ""));
+        assertTrue(_inspect(_msg(100 ether, 1)));
     }
 
     function test_set_onlyGuardian() public {
@@ -64,53 +73,48 @@ contract PolicyGateTest is Test {
     function test_allow_passes() public {
         _enable();
         policy.set(ALLOW, 0);
-        assertTrue(guard.inspect(_msg(100 ether, 1, keccak256("m")), ""));
+        assertTrue(_inspect(_msg(100 ether, 1)));
         assertFalse(guard.paused());
     }
 
     function test_deny_trips() public {
         _enable();
         policy.set(DENY, 0x0F);
-        SettlementMessage memory m = _msg(100 ether, 1, keccak256("m"));
+        SettlementMessage memory m = _msg(100 ether, 1);
 
         vm.expectEmit(true, true, false, true, address(guard));
-        emit SentinelTripped(TripReason.POLICY, m.messageId, address(this));
+        emit SentinelTripped(TripReason.POLICY, guard.digestOf(m), address(this));
 
-        assertFalse(guard.inspect(m, ""));
+        assertFalse(_inspect(m));
         assertTrue(guard.paused());
     }
 
-    function test_manualReview_trips() public {
+    function test_manualReview_holdsWithoutLatching() public {
         _enable();
         policy.set(MANUAL_REVIEW, 0);
-        SettlementMessage memory m = _msg(100 ether, 1, keccak256("m"));
-
-        vm.expectEmit(true, true, false, true, address(guard));
-        emit SentinelTripped(TripReason.POLICY, m.messageId, address(this));
-
-        assertFalse(guard.inspect(m, ""));
+        assertFalse(_inspect(_msg(100 ether, 1)));
+        assertFalse(guard.paused()); // MANUAL_REVIEW rejects the message, does not latch the breaker
     }
 
-    function test_policy_runsBeforeBinding() public {
+    function test_binding_runsBeforePolicy() public {
         _enable();
         policy.set(DENY, 0);
-        SettlementMessage memory m = _msg(100 ether, 1, keccak256("m"));
-        m.sender = attacker; // would also fail BINDING
+        SettlementMessage memory m = _msg(100 ether, 1);
 
-        vm.expectEmit(true, true, false, true, address(guard));
-        emit SentinelTripped(TripReason.POLICY, m.messageId, address(this));
-
-        assertFalse(guard.inspect(m, ""));
+        // bad signature => BINDING rejects first; policy (and its latch) never runs
+        assertFalse(guard.inspect(m, _signAs(guard, m, 0xBEEF)));
+        assertFalse(guard.paused());
     }
 
     function test_deny_leavesLedgerUntouched() public {
-        assertTrue(guard.inspect(_msg(10 ether, 1, keccak256("a")), ""));
+        assertTrue(_inspect(_msg(10 ether, 1)));
 
         _enable();
         policy.set(DENY, 0);
-        guard.inspect(_msg(10 ether, 2, keccak256("b")), "");
+        SettlementMessage memory bad = _msg(10 ether, 2);
+        _inspect(bad);
 
         assertEq(guard.lastNonce(SRC), 1);
-        assertFalse(guard.seen(keccak256("b")));
+        assertFalse(guard.seen(guard.digestOf(bad)));
     }
 }
