@@ -20,7 +20,8 @@ contract CrePolicyConsumer is ReceiverTemplate, Ownable, IPreSettlementPolicy {
         uint64 issuedAt;
     }
 
-    uint8 internal constant DENY = 2;
+    uint8 internal constant UNKNOWN = 0;
+    uint8 internal constant STALE = 3; // surfaced as MANUAL_REVIEW
 
     uint256 public maxAge = 1 hours;
     mapping(bytes32 => Verdict) internal _verdict;
@@ -32,8 +33,8 @@ contract CrePolicyConsumer is ReceiverTemplate, Ownable, IPreSettlementPolicy {
 
     function evaluate(bytes32 msgHash, bytes calldata) external view returns (uint8 verdict, uint8 riskMask) {
         Verdict memory v = _verdict[msgHash];
-        if (v.issuedAt == 0) return (DENY, 0);
-        if (block.timestamp > uint256(v.issuedAt) + maxAge) return (DENY, v.riskMask);
+        if (v.issuedAt == 0) return (UNKNOWN, 0);
+        if (block.timestamp > uint256(v.issuedAt) + maxAge) return (STALE, v.riskMask);
         return (v.code, v.riskMask);
     }
 
