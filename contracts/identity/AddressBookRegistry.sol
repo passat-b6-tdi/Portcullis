@@ -6,6 +6,8 @@ import { IIdentityRegistry } from "../core/interfaces/IIdentityRegistry.sol";
 import { AddressHelper } from "../AddressHelper.sol";
 
 contract AddressBookRegistry is IIdentityRegistry, Ownable {
+    using AddressHelper for address;
+
     error LengthMismatch();
 
     event AuthoritySet(bytes32 indexed srcId, address authority);
