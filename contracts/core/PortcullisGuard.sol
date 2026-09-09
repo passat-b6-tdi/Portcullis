@@ -30,19 +30,20 @@ contract PortcullisGuard {
     GuardState internal _s;
 
     modifier onlyGuardian() {
-        if (msg.sender != _s.guardian) revert Portcullis__NotGuardian();
+        require(msg.sender == _s.guardian, Portcullis__NotGuardian());
         _;
     }
 
     constructor(address guardian_, IIdentityRegistry identity_) {
-        if (guardian_ == address(0) || address(identity_) == address(0)) revert Portcullis__ZeroAddress();
+        require(guardian_ != address(0), Portcullis__ZeroAddress());
+        require(address(identity_) != address(0), Portcullis__ZeroAddress());
         _s.guardian = guardian_;
         identity = identity_;
     }
 
     function inspect(SettlementMessage calldata m, bytes calldata proof) external returns (bool) {
         GuardState storage s = _s;
-        if (s.paused) revert Portcullis__Paused();
+        require(!s.paused, Portcullis__Paused());
 
         (bool ok, TripReason reason) = s.evaluate(m, identity, proof);
         if (!ok) {
@@ -61,13 +62,13 @@ contract PortcullisGuard {
     }
 
     function transferGuardian(address to) external onlyGuardian {
-        if (to == address(0)) revert Portcullis__ZeroAddress();
+        require(to != address(0), Portcullis__ZeroAddress());
         emit GuardianTransferred(_s.guardian, to);
         _s.guardian = to;
     }
 
     function setBounds(uint256 minValue, uint256 maxValue) external onlyGuardian {
-        if (minValue > maxValue) revert Portcullis__BadConfig();
+        require(minValue < maxValue, Portcullis__BadConfig());
         _s.minValue = minValue;
         _s.maxValue = maxValue;
         emit BoundsSet(minValue, maxValue);
