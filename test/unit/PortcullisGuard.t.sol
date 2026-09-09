@@ -2,6 +2,8 @@
 pragma solidity 0.8.36;
 
 import { Test } from "forge-std/Test.sol";
+import { Ownable } from "solady/auth/Ownable.sol";
+import { AddressHelper } from "../../contracts/AddressHelper.sol";
 import { PortcullisGuard } from "../../contracts/core/PortcullisGuard.sol";
 import { PortcullisChecks } from "../../contracts/core/PortcullisChecks.sol";
 import { SettlementMessage, TripReason } from "../../contracts/core/types/GuardTypes.sol";
@@ -27,7 +29,7 @@ contract PortcullisGuardTest is Test {
         identity = new MockIdentityRegistry();
         identity.setAuthority(SRC, sender);
 
-        guard = new PortcullisGuard(guardianAddr, identity);
+        guard = new PortcullisGuard(guardianAddr, guardianAddr, address(identity));
 
         vm.startPrank(guardianAddr);
         guard.setBounds(1 ether, 1000 ether);
@@ -42,28 +44,29 @@ contract PortcullisGuardTest is Test {
     }
 
     function test_constructor_setsGuardian() public view {
-        assertEq(guard.guardian(), guardianAddr);
+        assertEq(guard.owner(), guardianAddr);
+        assertTrue(guard.isGuardian(guardianAddr));
         assertEq(address(guard.identity()), address(identity));
         assertFalse(guard.paused());
     }
 
     function test_constructor_revertsOnZeroGuardian() public {
-        vm.expectRevert(PortcullisGuard.Portcullis__ZeroAddress.selector);
-        new PortcullisGuard(address(0), identity);
+        vm.expectRevert(AddressHelper.ZeroAddress.selector);
+        new PortcullisGuard(guardianAddr, address(0), address(identity));
     }
 
     function test_constructor_revertsOnZeroIdentity() public {
-        vm.expectRevert(PortcullisGuard.Portcullis__ZeroAddress.selector);
-        new PortcullisGuard(guardianAddr, MockIdentityRegistry(address(0)));
+        vm.expectRevert(AddressHelper.ZeroAddress.selector);
+        new PortcullisGuard(guardianAddr, guardianAddr, address(0));
     }
 
     function test_setters_onlyGuardian() public {
         vm.startPrank(stranger);
-        vm.expectRevert(PortcullisGuard.Portcullis__NotGuardian.selector);
+        vm.expectRevert(Ownable.Unauthorized.selector);
         guard.setBounds(1, 2);
-        vm.expectRevert(PortcullisGuard.Portcullis__NotGuardian.selector);
+        vm.expectRevert(Ownable.Unauthorized.selector);
         guard.setAllowedToken(token, true);
-        vm.expectRevert(PortcullisGuard.Portcullis__NotGuardian.selector);
+        vm.expectRevert(Ownable.Unauthorized.selector);
         guard.clear();
         vm.stopPrank();
     }
@@ -199,10 +202,11 @@ contract PortcullisGuardTest is Test {
     function test_transferGuardian_movesRole() public {
         vm.prank(guardianAddr);
         guard.transferGuardian(stranger);
-        assertEq(guard.guardian(), stranger);
+        assertTrue(guard.isGuardian(stranger));
+        assertFalse(guard.isGuardian(guardianAddr));
 
         vm.prank(guardianAddr);
-        vm.expectRevert(PortcullisGuard.Portcullis__NotGuardian.selector);
+        vm.expectRevert(Ownable.Unauthorized.selector);
         guard.clear();
 
         vm.prank(stranger);
@@ -211,13 +215,13 @@ contract PortcullisGuardTest is Test {
 
     function test_transferGuardian_onlyGuardian() public {
         vm.prank(stranger);
-        vm.expectRevert(PortcullisGuard.Portcullis__NotGuardian.selector);
+        vm.expectRevert(Ownable.Unauthorized.selector);
         guard.transferGuardian(stranger);
     }
 
     function test_transferGuardian_rejectsZero() public {
         vm.prank(guardianAddr);
-        vm.expectRevert(PortcullisGuard.Portcullis__ZeroAddress.selector);
+        vm.expectRevert(AddressHelper.ZeroAddress.selector);
         guard.transferGuardian(address(0));
     }
 

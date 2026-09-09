@@ -28,7 +28,7 @@ contract GuardedReceiverTest is Test {
     function setUp() public {
         identity = new MockIdentityRegistry();
         identity.setAuthority(SRC, sender);
-        guard = new PortcullisGuard(guardianAddr, identity);
+        guard = new PortcullisGuard(guardianAddr, guardianAddr, address(identity));
 
         vm.startPrank(guardianAddr);
         guard.setBounds(1 ether, 1000 ether);

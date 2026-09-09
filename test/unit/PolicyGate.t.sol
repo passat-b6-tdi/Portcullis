@@ -2,6 +2,7 @@
 pragma solidity 0.8.36;
 
 import { Test } from "forge-std/Test.sol";
+import { Ownable } from "solady/auth/Ownable.sol";
 import { PortcullisGuard } from "../../contracts/core/PortcullisGuard.sol";
 import { IPreSettlementPolicy } from "../../contracts/core/interfaces/IPreSettlementPolicy.sol";
 import { SettlementMessage, TripReason } from "../../contracts/core/types/GuardTypes.sol";
@@ -30,7 +31,7 @@ contract PolicyGateTest is Test {
     function setUp() public {
         identity = new MockIdentityRegistry();
         identity.setAuthority(SRC, sender);
-        guard = new PortcullisGuard(guardianAddr, identity);
+        guard = new PortcullisGuard(guardianAddr, guardianAddr, address(identity));
         policy = new MockPolicyOracle();
 
         vm.startPrank(guardianAddr);
@@ -55,7 +56,8 @@ contract PolicyGateTest is Test {
     }
 
     function test_set_onlyGuardian() public {
-        vm.expectRevert(PortcullisGuard.Portcullis__NotGuardian.selector);
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert(Ownable.Unauthorized.selector);
         guard.setPolicy(policy);
     }
 

@@ -22,7 +22,7 @@ contract RateLimitTest is Test {
     function setUp() public {
         identity = new MockIdentityRegistry();
         identity.setAuthority(SRC, sender);
-        guard = new PortcullisGuard(guardianAddr, identity);
+        guard = new PortcullisGuard(guardianAddr, guardianAddr, address(identity));
 
         vm.startPrank(guardianAddr);
         guard.setBounds(1, 1_000_000 ether);
@@ -90,7 +90,7 @@ contract RateLimitTest is Test {
     }
 
     function test_rateDisabled_whenCapacityZero() public {
-        PortcullisGuard g = new PortcullisGuard(guardianAddr, identity);
+        PortcullisGuard g = new PortcullisGuard(guardianAddr, guardianAddr, address(identity));
         vm.startPrank(guardianAddr);
         g.setBounds(1, 1_000_000 ether);
         g.setAllowedToken(token, true);
