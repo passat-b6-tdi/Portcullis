@@ -2,82 +2,119 @@
 pragma solidity 0.8.36;
 
 import { Test } from "forge-std/Test.sol";
-import { ECDSA } from "solady/utils/ECDSA.sol";
+import { Ownable } from "solady/auth/Ownable.sol";
 import { AddressHelper } from "../../contracts/AddressHelper.sol";
 import { CrePolicyConsumer } from "../../contracts/oracle/CrePolicyConsumer.sol";
+import { ReceiverTemplate } from "../../contracts/oracle/ReceiverTemplate.sol";
 
 contract CrePolicyConsumerTest is Test {
-    uint8 internal constant ALLOW = 0;
+    uint8 internal constant ALLOW = 1;
     uint8 internal constant DENY = 2;
+    uint8 internal constant REVIEW = 3;
 
     CrePolicyConsumer internal consumer;
-    uint256 internal signerKey;
-    address internal signerAddr;
-    uint256 internal wrongKey;
+    address internal forwarder = makeAddr("forwarder");
+    address internal owner = makeAddr("owner");
+    address internal stranger = makeAddr("stranger");
 
     bytes32 internal constant MSG_HASH = keccak256("settlement");
 
+    event VerdictStored(bytes32 indexed msgHash, uint8 code, uint8 riskMask, uint64 issuedAt);
+
     function setUp() public {
-        signerKey = 0xA11CE;
-        signerAddr = vm.addr(signerKey);
-        wrongKey = 0xB0B;
-        consumer = new CrePolicyConsumer(signerAddr);
+        consumer = new CrePolicyConsumer(forwarder, owner);
     }
 
-    function _attest(uint8 verdict, uint8 riskMask, uint64 issuedAt, uint256 key) internal view returns (bytes memory) {
-        bytes32 digest = ECDSA.toEthSignedMessageHash(keccak256(abi.encode(MSG_HASH, verdict, riskMask, issuedAt)));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, digest);
-        return abi.encode(verdict, riskMask, issuedAt, abi.encodePacked(r, s, v));
+    function _report(bytes32 msgHash, uint8 code, uint8 riskMask, uint64 issuedAt) internal {
+        vm.prank(forwarder);
+        consumer.onReport("", abi.encode(msgHash, code, riskMask, issuedAt));
     }
 
-    function test_constructor_rejectsZeroSigner() public {
+    function test_constructor_rejectsZeroForwarder() public {
+        vm.expectRevert(ReceiverTemplate.InvalidForwarder.selector);
+        new CrePolicyConsumer(address(0), owner);
+    }
+
+    function test_constructor_rejectsZeroOwner() public {
         vm.expectRevert(AddressHelper.ZeroAddress.selector);
-        new CrePolicyConsumer(address(0));
+        new CrePolicyConsumer(forwarder, address(0));
     }
 
-    function test_validAllow_isReturned() public view {
-        bytes memory att = _attest(ALLOW, 0x00, uint64(block.timestamp), signerKey);
-        (uint8 verdict, uint8 riskMask) = consumer.evaluate(MSG_HASH, att);
+    function test_onReport_onlyForwarder() public {
+        vm.prank(stranger);
+        vm.expectRevert(ReceiverTemplate.InvalidSender.selector);
+        consumer.onReport("", abi.encode(MSG_HASH, ALLOW, uint8(0), uint64(block.timestamp)));
+    }
+
+    function test_storesAndReturnsAllow() public {
+        vm.expectEmit(true, false, false, true, address(consumer));
+        emit VerdictStored(MSG_HASH, ALLOW, 0x00, uint64(block.timestamp));
+        _report(MSG_HASH, ALLOW, 0x00, uint64(block.timestamp));
+
+        (uint8 verdict, uint8 riskMask) = consumer.evaluate(MSG_HASH, "");
         assertEq(verdict, ALLOW);
         assertEq(riskMask, 0x00);
     }
 
-    function test_validDeny_isReturned() public view {
-        bytes memory att = _attest(DENY, 0x0F, uint64(block.timestamp), signerKey);
-        (uint8 verdict, uint8 riskMask) = consumer.evaluate(MSG_HASH, att);
+    function test_storesAndReturnsDeny() public {
+        _report(MSG_HASH, DENY, 0x0F, uint64(block.timestamp));
+        (uint8 verdict, uint8 riskMask) = consumer.evaluate(MSG_HASH, "");
         assertEq(verdict, DENY);
         assertEq(riskMask, 0x0F);
     }
 
-    function test_emptyAttestation_denies() public view {
+    function test_unknownMessage_denies() public view {
+        (uint8 verdict,) = consumer.evaluate(keccak256("never-cleared"), "");
+        assertEq(verdict, DENY);
+    }
+
+    function test_staleVerdict_denies() public {
+        _report(MSG_HASH, ALLOW, 0x00, uint64(block.timestamp));
+        vm.warp(block.timestamp + consumer.maxAge() + 1);
         (uint8 verdict,) = consumer.evaluate(MSG_HASH, "");
         assertEq(verdict, DENY);
     }
 
-    function test_wrongSigner_denies() public view {
-        bytes memory att = _attest(ALLOW, 0x00, uint64(block.timestamp), wrongKey);
-        (uint8 verdict,) = consumer.evaluate(MSG_HASH, att);
-        assertEq(verdict, DENY);
+    function test_freshWithinMaxAge_returnsStored() public {
+        _report(MSG_HASH, ALLOW, 0x00, uint64(block.timestamp));
+        vm.warp(block.timestamp + consumer.maxAge() - 1);
+        (uint8 verdict,) = consumer.evaluate(MSG_HASH, "");
+        assertEq(verdict, ALLOW);
     }
 
-    function test_staleAttestation_denies() public {
-        bytes memory att = _attest(ALLOW, 0x00, uint64(block.timestamp), signerKey);
-        vm.warp(block.timestamp + consumer.MAX_AGE() + 1);
-        (uint8 verdict,) = consumer.evaluate(MSG_HASH, att);
-        assertEq(verdict, DENY);
+    function test_latestReportWins() public {
+        _report(MSG_HASH, ALLOW, 0x00, uint64(block.timestamp));
+        _report(MSG_HASH, REVIEW, 0x04, uint64(block.timestamp));
+        (uint8 verdict, uint8 riskMask) = consumer.evaluate(MSG_HASH, "");
+        assertEq(verdict, REVIEW);
+        assertEq(riskMask, 0x04);
     }
 
-    function test_tamperedRiskMask_denies() public view {
-        bytes memory att = _attest(ALLOW, 0x00, uint64(block.timestamp), signerKey);
-        (uint8 v, uint8 r, uint64 t, bytes memory sig) = abi.decode(att, (uint8, uint8, uint64, bytes));
-        bytes memory tampered = abi.encode(v, uint8(0xFF), t, sig);
-        (uint8 verdict,) = consumer.evaluate(MSG_HASH, tampered);
-        assertEq(verdict, DENY);
+    function test_setMaxAge_onlyOwner() public {
+        vm.prank(stranger);
+        vm.expectRevert(Ownable.Unauthorized.selector);
+        consumer.setMaxAge(1 days);
+
+        vm.prank(owner);
+        consumer.setMaxAge(1 days);
+        assertEq(consumer.maxAge(), 1 days);
     }
 
-    function test_wrongMsgHash_denies() public view {
-        bytes memory att = _attest(ALLOW, 0x00, uint64(block.timestamp), signerKey);
-        (uint8 verdict,) = consumer.evaluate(keccak256("other"), att);
-        assertEq(verdict, DENY);
+    function test_setForwarder_onlyOwner() public {
+        address newForwarder = makeAddr("newForwarder");
+
+        vm.prank(stranger);
+        vm.expectRevert(Ownable.Unauthorized.selector);
+        consumer.setForwarderAddress(newForwarder);
+
+        vm.prank(owner);
+        consumer.setForwarderAddress(newForwarder);
+        assertEq(consumer.getForwarderAddress(), newForwarder);
+    }
+
+    function test_renounceOwnership_blocked() public {
+        vm.prank(owner);
+        vm.expectRevert();
+        consumer.renounceOwnership();
     }
 }
