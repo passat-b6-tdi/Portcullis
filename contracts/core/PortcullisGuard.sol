@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
-import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
+import { OwnableRoles } from "solady/auth/OwnableRoles.sol";
 import { SettlementMessage, GuardState, TripReason } from "./types/GuardTypes.sol";
 import { IIdentityRegistry } from "./interfaces/IIdentityRegistry.sol";
 import { IVolumeVerdictOracle } from "./interfaces/IVolumeVerdictOracle.sol";
 import { IPreSettlementPolicy } from "./interfaces/IPreSettlementPolicy.sol";
 import { PortcullisChecks } from "./PortcullisChecks.sol";
 
-contract PortcullisGuard is AccessControl {
+contract PortcullisGuard is OwnableRoles {
     using PortcullisChecks for GuardState;
 
     error Portcullis__Paused();
-    error Portcullis__NotGuardian();
     error Portcullis__ZeroAddress();
     error Portcullis__BadConfig();
 
@@ -26,16 +25,18 @@ contract PortcullisGuard is AccessControl {
     event PolicySet(address indexed policy);
     event GuardianTransferred(address indexed from, address indexed to);
 
-    bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
+    // owner administers guardians; guardians operate the breaker
+    uint256 public constant GUARDIAN_ROLE = 1 << 0;
 
     IIdentityRegistry public immutable identity;
 
     GuardState internal _s;
 
-    constructor(address guardian_, IIdentityRegistry identity_) {
+    constructor(address _owner, address guardian_, IIdentityRegistry identity_) {
         require(guardian_ != address(0), Portcullis__ZeroAddress());
         require(address(identity_) != address(0), Portcullis__ZeroAddress());
-        _grantRole(GUARDIAN_ROLE, guardian_);
+        _initializeOwner(_owner);
+        _grantRoles(guardian_, GUARDIAN_ROLE);
         identity = identity_;
     }
 
@@ -54,30 +55,35 @@ contract PortcullisGuard is AccessControl {
         return true;
     }
 
-    function clear() external onlyRole(GUARDIAN_ROLE) {
+    function clear() external onlyRoles(GUARDIAN_ROLE) {
         _s.paused = false;
         emit SentinelCleared(msg.sender);
     }
 
-    function transferGuardian(address to) external onlyRole(GUARDIAN_ROLE) {
+    function transferGuardian(address to) external onlyRoles(GUARDIAN_ROLE) {
         require(to != address(0), Portcullis__ZeroAddress());
-        emit GuardianTransferred(_s.guardian, to);
-        _s.guardian = to;
+        _grantRoles(to, GUARDIAN_ROLE);
+        _removeRoles(msg.sender, GUARDIAN_ROLE);
+        emit GuardianTransferred(msg.sender, to);
     }
 
-    function setBounds(uint256 minValue, uint256 maxValue) external onlyRole(GUARDIAN_ROLE) {
+    function renounceOwnership() public payable override onlyOwner {
+        revert Portcullis__BadConfig();
+    }
+
+    function setBounds(uint256 minValue, uint256 maxValue) external onlyRoles(GUARDIAN_ROLE) {
         require(minValue < maxValue, Portcullis__BadConfig());
         _s.minValue = minValue;
         _s.maxValue = maxValue;
         emit BoundsSet(minValue, maxValue);
     }
 
-    function setAllowedToken(address token, bool allowed) external onlyRole(GUARDIAN_ROLE) {
+    function setAllowedToken(address token, bool allowed) external onlyRoles(GUARDIAN_ROLE) {
         _s.allowedToken[token] = allowed;
         emit TokenAllowed(token, allowed);
     }
 
-    function setRate(uint256 capacity, uint256 refillPerSec) external onlyRole(GUARDIAN_ROLE) {
+    function setRate(uint256 capacity, uint256 refillPerSec) external onlyRoles(GUARDIAN_ROLE) {
         _s.rateCapacity = capacity;
         _s.rateRefillPerSec = refillPerSec;
         _s.tokens = capacity;
@@ -87,7 +93,7 @@ contract PortcullisGuard is AccessControl {
 
     function setVolumePolicy(IVolumeVerdictOracle oracle, uint256 spikeFactorBps, uint256 warmup)
         external
-        onlyRole(GUARDIAN_ROLE)
+        onlyRoles(GUARDIAN_ROLE)
     {
         _s.volumeOracle = oracle;
         _s.spikeFactorBps = spikeFactorBps;
@@ -95,17 +101,17 @@ contract PortcullisGuard is AccessControl {
         emit VolumePolicySet(address(oracle), spikeFactorBps, warmup);
     }
 
-    function setPolicy(IPreSettlementPolicy policy_) external onlyRole(GUARDIAN_ROLE) {
+    function setPolicy(IPreSettlementPolicy policy_) external onlyRoles(GUARDIAN_ROLE) {
         _s.policy = policy_;
         emit PolicySet(address(policy_));
     }
 
-    function paused() external view returns (bool) {
-        return _s.paused;
+    function isGuardian(address account) external view returns (bool) {
+        return hasAnyRole(account, GUARDIAN_ROLE);
     }
 
-    function guardian() external view returns (address) {
-        return _s.guardian;
+    function paused() external view returns (bool) {
+        return _s.paused;
     }
 
     function bounds() external view returns (uint256 minValue, uint256 maxValue) {
