@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
-import { Test } from "forge-std/Test.sol";
 import { CommonBase } from "forge-std/Base.sol";
 import { StdUtils } from "forge-std/StdUtils.sol";
 import { PortcullisGuard } from "../../contracts/core/PortcullisGuard.sol";
@@ -9,6 +8,7 @@ import { SettlementMessage } from "../../contracts/core/types/GuardTypes.sol";
 import { MockIdentityRegistry } from "../mocks/MockIdentityRegistry.sol";
 import { AbiGuardedReceiver } from "../mocks/AbiGuardedReceiver.sol";
 import { MockRelayer } from "../mocks/MockRelayer.sol";
+import { GuardScenario } from "../util/GuardScenario.sol";
 
 contract ReceiverHandler is CommonBase, StdUtils {
     PortcullisGuard public immutable guard;
@@ -16,21 +16,24 @@ contract ReceiverHandler is CommonBase, StdUtils {
     MockRelayer public immutable relayer;
 
     bytes32 public immutable src;
-    address public immutable sender;
     address public immutable recipient;
     address public immutable token;
     uint256 public immutable minValue;
     uint256 public immutable maxValue;
+    uint256 internal immutable authorityPk;
 
     uint256 public nextNonce = 1;
     uint256 public clearedValue;
+
+    SettlementMessage internal _lastCleared;
+    bool internal _haveCleared;
 
     constructor(
         PortcullisGuard guard_,
         AbiGuardedReceiver receiver_,
         MockRelayer relayer_,
         bytes32 src_,
-        address sender_,
+        uint256 authorityPk_,
         address recipient_,
         address token_,
         uint256 minValue_,
@@ -40,58 +43,64 @@ contract ReceiverHandler is CommonBase, StdUtils {
         receiver = receiver_;
         relayer = relayer_;
         src = src_;
-        sender = sender_;
+        authorityPk = authorityPk_;
         recipient = recipient_;
         token = token_;
         minValue = minValue_;
         maxValue = maxValue_;
     }
 
-    function _tmpl(address from, uint256 value, uint256 nonce, bytes32 id)
-        internal
-        view
-        returns (SettlementMessage memory)
-    {
+    function _tmpl(uint256 value, uint256 nonce) internal view returns (SettlementMessage memory) {
         return SettlementMessage({
-            srcId: src, sender: from, recipient: recipient, token: token, value: value, appNonce: nonce, messageId: id
+            srcId: src,
+            recipient: recipient,
+            token: token,
+            value: value,
+            appNonce: nonce,
+            deadline: block.timestamp + 365 days
         });
     }
 
-    function _deliver(SettlementMessage memory m) internal {
+    function _sign(SettlementMessage memory m, uint256 pk) internal view returns (bytes memory) {
+        bytes32 ethHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", guard.digestOf(m)));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, ethHash);
+        return abi.encodePacked(r, s, v);
+    }
+
+    function _deliver(SettlementMessage memory m, bytes memory proof) internal {
         uint256 before = guard.lastNonce(src);
-        try relayer.send(receiver, m, "") { } catch { }
-        if (guard.lastNonce(src) == before + 1) clearedValue += m.value;
+        try relayer.send(receiver, m, proof) { } catch { }
+        if (guard.lastNonce(src) == before + 1) {
+            clearedValue += m.value;
+            _lastCleared = m;
+            _haveCleared = true;
+        }
         nextNonce = guard.lastNonce(src) + 1;
     }
 
     function sendValid(uint256 valueSeed) external {
-        _deliver(_tmpl(sender, bound(valueSeed, minValue, maxValue), nextNonce, keccak256(abi.encode("v", nextNonce))));
+        SettlementMessage memory m = _tmpl(bound(valueSeed, minValue, maxValue), nextNonce);
+        _deliver(m, _sign(m, authorityPk));
     }
 
-    function sendSpoofed(uint256 valueSeed, address badSender) external {
-        if (badSender == sender) return;
-        _deliver(
-            _tmpl(badSender, bound(valueSeed, minValue, maxValue), nextNonce, keccak256(abi.encode("s", nextNonce)))
-        );
+    function sendBadSignature(uint256 valueSeed) external {
+        SettlementMessage memory m = _tmpl(bound(valueSeed, minValue, maxValue), nextNonce);
+        _deliver(m, _sign(m, authorityPk + 1));
     }
 
-    function sendReplay(uint256 valueSeed) external {
-        _deliver(_tmpl(sender, bound(valueSeed, minValue, maxValue), nextNonce, keccak256(abi.encode("v", 1))));
+    function sendReplay() external {
+        if (!_haveCleared) return;
+        SettlementMessage memory m = _lastCleared;
+        _deliver(m, _sign(m, authorityPk));
     }
 
     function sendOversized(uint256 valueSeed) external {
-        _deliver(
-            _tmpl(
-                sender,
-                bound(valueSeed, maxValue + 1, type(uint128).max),
-                nextNonce,
-                keccak256(abi.encode("o", nextNonce))
-            )
-        );
+        SettlementMessage memory m = _tmpl(bound(valueSeed, maxValue + 1, type(uint128).max), nextNonce);
+        _deliver(m, _sign(m, authorityPk));
     }
 }
 
-contract ReceiverLedgerInvariantTest is Test {
+contract ReceiverLedgerInvariantTest is GuardScenario {
     PortcullisGuard internal guard;
     MockIdentityRegistry internal identity;
     AbiGuardedReceiver internal receiver;
@@ -99,7 +108,6 @@ contract ReceiverLedgerInvariantTest is Test {
     ReceiverHandler internal handler;
 
     address internal guardianAddr = makeAddr("guardian");
-    address internal sender = makeAddr("sender");
     address internal recipient = makeAddr("recipient");
     address internal token = makeAddr("token");
 
@@ -109,17 +117,20 @@ contract ReceiverLedgerInvariantTest is Test {
 
     function setUp() public {
         identity = new MockIdentityRegistry();
-        identity.setAuthority(SRC, sender);
+        identity.setAuthority(SRC, authority);
         guard = new PortcullisGuard(guardianAddr, guardianAddr, address(identity));
-
-        vm.startPrank(guardianAddr);
-        guard.setBounds(MIN, MAX);
-        guard.setAllowedToken(token, true);
-        vm.stopPrank();
 
         receiver = new AbiGuardedReceiver(guard);
         relayer = new MockRelayer();
-        handler = new ReceiverHandler(guard, receiver, relayer, SRC, sender, recipient, token, MIN, MAX);
+        handler = new ReceiverHandler(guard, receiver, relayer, SRC, AUTHORITY_PK, recipient, token, MIN, MAX);
+
+        vm.startPrank(guardianAddr);
+        guard.setBounds(MIN, MAX);
+        guard.setAllowedToken(token, true, 18);
+        guard.setEnrolled(SRC, true);
+        guard.setAdapter(address(receiver), true);
+        vm.stopPrank();
+
         targetContract(address(handler));
     }
 
