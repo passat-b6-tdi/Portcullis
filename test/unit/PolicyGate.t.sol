@@ -10,9 +10,9 @@ import { MockIdentityRegistry } from "../mocks/MockIdentityRegistry.sol";
 import { MockPolicyOracle } from "../mocks/MockPolicyOracle.sol";
 
 contract PolicyGateTest is Test {
-    uint8 internal constant ALLOW = 0;
-    uint8 internal constant MANUAL_REVIEW = 1;
+    uint8 internal constant ALLOW = 1;
     uint8 internal constant DENY = 2;
+    uint8 internal constant MANUAL_REVIEW = 3;
 
     PortcullisGuard internal guard;
     MockIdentityRegistry internal identity;
