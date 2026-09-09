@@ -23,6 +23,7 @@ contract PortcullisGuard {
     event RateSet(uint256 capacity, uint256 refillPerSec);
     event VolumePolicySet(address indexed oracle, uint256 spikeFactorBps, uint256 warmup);
     event PolicySet(address indexed policy);
+    event GuardianTransferred(address indexed from, address indexed to);
 
     IIdentityRegistry public immutable identity;
 
@@ -57,6 +58,12 @@ contract PortcullisGuard {
     function clear() external onlyGuardian {
         _s.paused = false;
         emit SentinelCleared(msg.sender);
+    }
+
+    function transferGuardian(address to) external onlyGuardian {
+        if (to == address(0)) revert Portcullis__ZeroAddress();
+        emit GuardianTransferred(_s.guardian, to);
+        _s.guardian = to;
     }
 
     function setBounds(uint256 minValue, uint256 maxValue) external onlyGuardian {
