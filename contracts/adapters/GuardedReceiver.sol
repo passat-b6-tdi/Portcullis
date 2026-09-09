@@ -5,9 +5,9 @@ import { PortcullisGuard } from "../core/PortcullisGuard.sol";
 import { SettlementMessage } from "../core/types/GuardTypes.sol";
 
 abstract contract GuardedReceiver {
-    PortcullisGuard public immutable guard;
-
     event SettlementRejected(bytes32 indexed messageId);
+
+    PortcullisGuard public immutable guard;
 
     constructor(PortcullisGuard guard_) {
         guard = guard_;
