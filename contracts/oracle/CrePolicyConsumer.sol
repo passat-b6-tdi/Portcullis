@@ -1,38 +1,66 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
-import { ECDSA } from "solady/utils/ECDSA.sol";
+import { Ownable } from "solady/auth/Ownable.sol";
+import { ReceiverTemplate } from "./ReceiverTemplate.sol";
 import { IPreSettlementPolicy } from "../core/interfaces/IPreSettlementPolicy.sol";
 import { AddressHelper } from "../AddressHelper.sol";
 
-contract CrePolicyConsumer is IPreSettlementPolicy {
+// Verdict codes match the CRE report: 1 = ALLOW, 2 = DENY, 3 = MANUAL_REVIEW; 0 = none.
+contract CrePolicyConsumer is ReceiverTemplate, Ownable, IPreSettlementPolicy {
     using AddressHelper for address;
-    error ZeroSigner();
 
-    uint8 internal constant DENY = 2;
-    uint256 public constant MAX_AGE = 10 minutes;
+    event VerdictStored(bytes32 indexed msgHash, uint8 code, uint8 riskMask, uint64 issuedAt);
+    event MaxAgeSet(uint256 maxAge);
+    event ForwarderSet(address forwarder);
 
-    address public immutable signer;
-
-    constructor(address signer_) {
-        signer_.zeroAddressCheck();
-        signer = signer_;
+    struct Verdict {
+        uint8 code;
+        uint8 riskMask;
+        uint64 issuedAt;
     }
 
-    function evaluate(bytes32 msgHash, bytes calldata attestation)
-        external
-        view
-        returns (uint8 verdict, uint8 riskMask)
-    {
-        if (attestation.length == 0) return (DENY, 0);
+    uint8 internal constant DENY = 2;
 
-        uint64 issuedAt;
-        bytes memory sig;
-        (verdict, riskMask, issuedAt, sig) = abi.decode(attestation, (uint8, uint8, uint64, bytes));
+    uint256 public maxAge = 1 hours;
+    mapping(bytes32 => Verdict) internal _verdict;
 
-        if (block.timestamp > uint256(issuedAt) + MAX_AGE) return (DENY, riskMask);
+    constructor(address forwarder_, address owner_) ReceiverTemplate(forwarder_) {
+        owner_.zeroAddressCheck();
+        _initializeOwner(owner_);
+    }
 
-        bytes32 digest = ECDSA.toEthSignedMessageHash(keccak256(abi.encode(msgHash, verdict, riskMask, issuedAt)));
-        if (ECDSA.tryRecover(digest, sig) != signer) return (DENY, riskMask);
+    function evaluate(bytes32 msgHash, bytes calldata) external view returns (uint8 verdict, uint8 riskMask) {
+        Verdict memory v = _verdict[msgHash];
+        if (v.issuedAt == 0) return (DENY, 0);
+        if (block.timestamp > uint256(v.issuedAt) + maxAge) return (DENY, v.riskMask);
+        return (v.code, v.riskMask);
+    }
+
+    function verdictOf(bytes32 msgHash) external view returns (uint8 code, uint8 riskMask, uint64 issuedAt) {
+        Verdict memory v = _verdict[msgHash];
+        return (v.code, v.riskMask, v.issuedAt);
+    }
+
+    function setMaxAge(uint256 seconds_) external onlyOwner {
+        maxAge = seconds_;
+        emit MaxAgeSet(seconds_);
+    }
+
+    function setForwarderAddress(address forwarder_) external override onlyOwner {
+        forwarder_.zeroAddressCheck();
+        _forwarder = forwarder_;
+        emit ForwarderSet(forwarder_);
+    }
+
+    function renounceOwnership() public payable override onlyOwner {
+        revert Unauthorized();
+    }
+
+    function _processReport(bytes calldata report) internal override {
+        (bytes32 msgHash, uint8 code, uint8 riskMask, uint64 issuedAt) =
+            abi.decode(report, (bytes32, uint8, uint8, uint64));
+        _verdict[msgHash] = Verdict(code, riskMask, issuedAt);
+        emit VerdictStored(msgHash, code, riskMask, issuedAt);
     }
 }
