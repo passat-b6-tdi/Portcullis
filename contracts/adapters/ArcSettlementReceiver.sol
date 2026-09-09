@@ -7,6 +7,8 @@ import { PortcullisGuard } from "../core/PortcullisGuard.sol";
 import { SettlementMessage } from "../core/types/GuardTypes.sol";
 
 contract ArcSettlementReceiver is GuardedReceiver {
+    using SafeTransferLib for address;
+
     event SettlementPaid(bytes32 indexed messageId, address indexed recipient, address token, uint256 value);
 
     constructor(PortcullisGuard guard_) GuardedReceiver(guard_) { }
@@ -21,7 +23,7 @@ contract ArcSettlementReceiver is GuardedReceiver {
     }
 
     function _handleValidated(SettlementMessage memory m) internal override {
-        SafeTransferLib.safeTransfer(m.token, m.recipient, m.value);
+        m.token.safeTransfer(m.recipient, m.value);
         emit SettlementPaid(m.messageId, m.recipient, m.token, m.value);
     }
 }

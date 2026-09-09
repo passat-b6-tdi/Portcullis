@@ -8,11 +8,13 @@ import { IVolumeVerdictOracle } from "./interfaces/IVolumeVerdictOracle.sol";
 import { IPreSettlementPolicy } from "./interfaces/IPreSettlementPolicy.sol";
 import { PortcullisChecks } from "./PortcullisChecks.sol";
 
+import { AddressHelper } from "../AddressHelper.sol";
+
 contract PortcullisGuard is OwnableRoles {
     using PortcullisChecks for GuardState;
+    using AddressHelper for address;
 
     error Portcullis__Paused();
-    error Portcullis__ZeroAddress();
     error Portcullis__BadConfig();
 
     event SentinelTripped(TripReason reason, bytes32 indexed messageId, address indexed reporter);
@@ -32,12 +34,12 @@ contract PortcullisGuard is OwnableRoles {
 
     GuardState internal _s;
 
-    constructor(address _owner, address guardian_, IIdentityRegistry identity_) {
-        require(guardian_ != address(0), Portcullis__ZeroAddress());
-        require(address(identity_) != address(0), Portcullis__ZeroAddress());
+    constructor(address _owner, address guardian_, address identity_) {
+        guardian_.zeroAddressCheck();
+        identity_.zeroAddressCheck();
         _initializeOwner(_owner);
         _grantRoles(guardian_, GUARDIAN_ROLE);
-        identity = identity_;
+        identity = IIdentityRegistry(identity_);
     }
 
     function inspect(SettlementMessage calldata m, bytes calldata proof) external returns (bool) {
@@ -61,7 +63,7 @@ contract PortcullisGuard is OwnableRoles {
     }
 
     function transferGuardian(address to) external onlyRoles(GUARDIAN_ROLE) {
-        require(to != address(0), Portcullis__ZeroAddress());
+        to.zeroAddressCheck();
         _grantRoles(to, GUARDIAN_ROLE);
         _removeRoles(msg.sender, GUARDIAN_ROLE);
         emit GuardianTransferred(msg.sender, to);
