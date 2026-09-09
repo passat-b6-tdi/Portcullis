@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.36;
 
-import { Test } from "forge-std/Test.sol";
 import { PortcullisGuard } from "../../contracts/core/PortcullisGuard.sol";
 import { MockIdentityRegistry } from "../mocks/MockIdentityRegistry.sol";
 import { GuardHandler } from "./handlers/GuardHandler.sol";
+import { GuardScenario } from "../util/GuardScenario.sol";
 
-contract GuardInvariantTest is Test {
+contract GuardInvariantTest is GuardScenario {
     PortcullisGuard internal guard;
     MockIdentityRegistry internal identity;
     GuardHandler internal handler;
 
     address internal guardianAddr = makeAddr("guardian");
-    address internal sender = makeAddr("sender");
     address internal recipient = makeAddr("recipient");
     address internal token = makeAddr("token");
 
@@ -23,16 +22,19 @@ contract GuardInvariantTest is Test {
 
     function setUp() public {
         identity = new MockIdentityRegistry();
-        identity.setAuthority(SRC, sender);
+        identity.setAuthority(SRC, authority);
         guard = new PortcullisGuard(guardianAddr, guardianAddr, address(identity));
+
+        handler = new GuardHandler(guard, SRC, AUTHORITY_PK, recipient, token, MIN, MAX);
 
         vm.startPrank(guardianAddr);
         guard.setBounds(MIN, MAX);
-        guard.setAllowedToken(token, true);
+        guard.setAllowedToken(token, true, 18);
         guard.setRate(RATE_CAPACITY, 0); // no refill: cleared value must stay <= capacity
+        guard.setEnrolled(SRC, true);
+        guard.setAdapter(address(handler), true);
         vm.stopPrank();
 
-        handler = new GuardHandler(guard, SRC, sender, recipient, token, MIN, MAX);
         targetContract(address(handler));
     }
 
