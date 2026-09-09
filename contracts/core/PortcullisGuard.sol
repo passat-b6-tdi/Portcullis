@@ -19,22 +19,37 @@ contract PortcullisGuard is OwnableRoles {
 
     event SentinelTripped(TripReason reason, bytes32 indexed messageId, address indexed reporter);
     event SentinelCleared(address indexed guardian);
-    event SettlementCleared(bytes32 indexed messageId, uint8 detectorMask);
+
+    event SettlementInspected(
+        bytes32 indexed messageId,
+        bytes32 indexed srcId,
+        address recipient,
+        address token,
+        uint256 value,
+        bool cleared,
+        TripReason reason,
+        uint8 detectorMask
+    );
     event BoundsSet(uint256 minValue, uint256 maxValue);
     event TokenAllowed(address indexed token, bool allowed);
     event RateSet(uint256 capacity, uint256 refillPerSec);
     event VolumePolicySet(address indexed oracle, uint256 spikeFactorBps, uint256 warmup);
     event PolicySet(address indexed policy);
     event GuardianTransferred(address indexed from, address indexed to);
+    event SourceEnrolled(bytes32 indexed srcId, bool enrolled);
+    event AdapterSet(address indexed adapter, bool allowed);
+    event SeenReset(bytes32 indexed messageId);
+    event NonceResynced(bytes32 indexed srcId, uint256 nonce);
 
-    // owner administers guardians; guardians operate the breaker
     uint256 public constant GUARDIAN_ROLE = 1 << 0;
+    uint256 public constant ADAPTER_ROLE = 1 << 1;
 
     IIdentityRegistry public immutable identity;
 
     GuardState internal _s;
 
     constructor(address _owner, address guardian_, address identity_) {
+        _owner.zeroAddressCheck();
         guardian_.zeroAddressCheck();
         identity_.zeroAddressCheck();
         _initializeOwner(_owner);
@@ -42,19 +57,31 @@ contract PortcullisGuard is OwnableRoles {
         identity = IIdentityRegistry(identity_);
     }
 
-    function inspect(SettlementMessage calldata m, bytes calldata proof) external returns (bool) {
+    function inspect(SettlementMessage calldata m, bytes calldata proof)
+        external
+        onlyRoles(ADAPTER_ROLE)
+        returns (bool)
+    {
         GuardState storage s = _s;
         require(!s.paused, Portcullis__Paused());
 
+        bytes32 mid = PortcullisChecks.digest(m);
         (bool ok, TripReason reason) = s.evaluate(m, identity, proof);
         if (!ok) {
-            _trip(reason, m.messageId);
+            if (_latching(reason)) _trip(reason, mid);
+            emit SettlementInspected(mid, m.srcId, m.recipient, m.token, m.value, false, reason, 0);
             return false;
         }
 
         s.commit(m);
-        emit SettlementCleared(m.messageId, PortcullisChecks.PASS_MASK);
+        emit SettlementInspected(
+            mid, m.srcId, m.recipient, m.token, m.value, true, TripReason.NONE, PortcullisChecks.PASS_MASK
+        );
         return true;
+    }
+
+    function digestOf(SettlementMessage calldata m) external view returns (bytes32) {
+        return PortcullisChecks.digest(m);
     }
 
     function clear() external onlyRoles(GUARDIAN_ROLE) {
@@ -64,6 +91,7 @@ contract PortcullisGuard is OwnableRoles {
 
     function transferGuardian(address to) external onlyRoles(GUARDIAN_ROLE) {
         to.zeroAddressCheck();
+        require(to != msg.sender, Portcullis__BadConfig());
         _grantRoles(to, GUARDIAN_ROLE);
         _removeRoles(msg.sender, GUARDIAN_ROLE);
         emit GuardianTransferred(msg.sender, to);
@@ -71,6 +99,28 @@ contract PortcullisGuard is OwnableRoles {
 
     function renounceOwnership() public payable override onlyOwner {
         revert Portcullis__BadConfig();
+    }
+
+    function setEnrolled(bytes32 srcId, bool value) external onlyRoles(GUARDIAN_ROLE) {
+        _s.enrolled[srcId] = value;
+        emit SourceEnrolled(srcId, value);
+    }
+
+    function setAdapter(address adapter, bool allowed) external onlyRoles(GUARDIAN_ROLE) {
+        adapter.zeroAddressCheck();
+        if (allowed) _grantRoles(adapter, ADAPTER_ROLE);
+        else _removeRoles(adapter, ADAPTER_ROLE);
+        emit AdapterSet(adapter, allowed);
+    }
+
+    function resetSeen(bytes32 messageId) external onlyRoles(GUARDIAN_ROLE) {
+        delete _s.seen[messageId];
+        emit SeenReset(messageId);
+    }
+
+    function resyncNonce(bytes32 srcId, uint256 nonce) external onlyRoles(GUARDIAN_ROLE) {
+        _s.lastNonce[srcId] = nonce;
+        emit NonceResynced(srcId, nonce);
     }
 
     function setBounds(uint256 minValue, uint256 maxValue) external onlyRoles(GUARDIAN_ROLE) {
@@ -112,6 +162,14 @@ contract PortcullisGuard is OwnableRoles {
         return hasAnyRole(account, GUARDIAN_ROLE);
     }
 
+    function isAdapter(address account) external view returns (bool) {
+        return hasAnyRole(account, ADAPTER_ROLE);
+    }
+
+    function enrolled(bytes32 srcId) external view returns (bool) {
+        return _s.enrolled[srcId];
+    }
+
     function paused() external view returns (bool) {
         return _s.paused;
     }
@@ -146,6 +204,10 @@ contract PortcullisGuard is OwnableRoles {
         returns (address oracle, uint256 baseline, uint256 spikeFactorBps, uint256 observations, uint256 warmup)
     {
         return (address(_s.volumeOracle), _s.baseline, _s.spikeFactorBps, _s.observations, _s.warmup);
+    }
+
+    function _latching(TripReason reason) private pure returns (bool) {
+        return reason == TripReason.RATE_LIMIT || reason == TripReason.VOLUME_SPIKE || reason == TripReason.POLICY;
     }
 
     function _trip(TripReason reason, bytes32 messageId) internal {
