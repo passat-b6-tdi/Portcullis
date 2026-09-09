@@ -8,6 +8,7 @@ import { CrePolicyConsumer } from "../../contracts/oracle/CrePolicyConsumer.sol"
 import { ReceiverTemplate } from "../../contracts/oracle/ReceiverTemplate.sol";
 
 contract CrePolicyConsumerTest is Test {
+    uint8 internal constant UNKNOWN = 0;
     uint8 internal constant ALLOW = 1;
     uint8 internal constant DENY = 2;
     uint8 internal constant REVIEW = 3;
@@ -63,16 +64,16 @@ contract CrePolicyConsumerTest is Test {
         assertEq(riskMask, 0x0F);
     }
 
-    function test_unknownMessage_denies() public view {
+    function test_unknownMessage_returnsUnknown_notDeny() public view {
         (uint8 verdict,) = consumer.evaluate(keccak256("never-cleared"), "");
-        assertEq(verdict, DENY);
+        assertEq(verdict, UNKNOWN); // holds the message for retry; does not latch the breaker
     }
 
-    function test_staleVerdict_denies() public {
+    function test_staleVerdict_returnsReview_notDeny() public {
         _report(MSG_HASH, ALLOW, 0x00, uint64(block.timestamp));
         vm.warp(block.timestamp + consumer.maxAge() + 1);
         (uint8 verdict,) = consumer.evaluate(MSG_HASH, "");
-        assertEq(verdict, DENY);
+        assertEq(verdict, REVIEW); // hold, not a DENY
     }
 
     function test_freshWithinMaxAge_returnsStored() public {
