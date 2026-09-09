@@ -16,7 +16,7 @@ abstract contract GuardedReceiver {
     function receiveMessage(bytes calldata wire) external {
         (SettlementMessage memory m, bytes memory proof) = _decode(wire);
         if (!guard.inspect(m, proof)) {
-            emit SettlementRejected(m.messageId);
+            emit SettlementRejected(guard.digestOf(m));
             return;
         }
         _handleValidated(m);

@@ -24,6 +24,6 @@ contract ArcSettlementReceiver is GuardedReceiver {
 
     function _handleValidated(SettlementMessage memory m) internal override {
         m.token.safeTransfer(m.recipient, m.value);
-        emit SettlementPaid(m.messageId, m.recipient, m.token, m.value);
+        emit SettlementPaid(guard.digestOf(m), m.recipient, m.token, m.value);
     }
 }

@@ -26,7 +26,6 @@ library PortcullisChecks {
         return keccak256(abi.encode(block.chainid, address(this), m));
     }
 
-    // view-only: runs all detectors in order, never writes
     function evaluate(
         GuardState storage s,
         SettlementMessage calldata m,
