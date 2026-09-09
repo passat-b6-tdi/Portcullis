@@ -14,7 +14,7 @@ library PortcullisChecks {
 
     uint8 internal constant PASS_MASK = BIT_BINDING | BIT_BOUNDS | BIT_REPLAY | BIT_RATE | BIT_VOLUME | BIT_POLICY;
 
-    uint8 internal constant POLICY_ALLOW = 0;
+    uint8 internal constant POLICY_ALLOW = 1; // CRE verdict codes: 1 ALLOW, 2 DENY, 3 REVIEW, 0 none
 
     uint256 private constant BPS = 10_000;
     uint256 private constant EMA_ALPHA = 8;
@@ -25,7 +25,7 @@ library PortcullisChecks {
         SettlementMessage calldata m,
         IIdentityRegistry identity,
         bytes calldata proof
-    ) internal view returns (bool ok, TripReason reason) {
+    ) external view returns (bool ok, TripReason reason) {
         if (address(s.policy) != address(0)) {
             (uint8 verdict,) = s.policy.evaluate(keccak256(abi.encode(m)), proof);
             if (verdict != POLICY_ALLOW) return (false, TripReason.POLICY); // 0. confidential policy
@@ -51,7 +51,7 @@ library PortcullisChecks {
     }
 
     // called by the guard only after evaluate returns ok; no external calls
-    function commit(GuardState storage s, SettlementMessage calldata m) internal {
+    function commit(GuardState storage s, SettlementMessage calldata m) external {
         s.seen[m.messageId] = true;
         s.lastNonce[m.srcId] = m.appNonce;
 
