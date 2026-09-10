@@ -15,11 +15,14 @@ contract ConfigureGuard is Script {
         address authority = vm.envAddress("SRC_AUTHORITY");
         address adapter = vm.envOr("ADAPTER", address(0));
         address policy = vm.envOr("POLICY", address(0));
+        address allowToken = vm.envOr("ALLOW_TOKEN", address(0));
+        uint8 allowTokenDecimals = uint8(vm.envOr("ALLOW_TOKEN_DECIMALS", uint256(6)));
 
         vm.startBroadcast();
         registry.setAuthority(srcId, authority);
         if (guard.isGuardian(msg.sender)) {
             guard.setEnrolled(srcId, true);
+            if (allowToken != address(0)) guard.setAllowedToken(allowToken, true, allowTokenDecimals);
             if (adapter != address(0)) guard.setAdapter(adapter, true);
             if (policy != address(0)) guard.setPolicy(IPreSettlementPolicy(policy));
         }
