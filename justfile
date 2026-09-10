@@ -24,10 +24,10 @@ deploy-core network sender:
     forge script script/DeployCore.s.sol:DeployCore \
         --rpc-url {{network}} --account {{account}} --sender {{sender}} --broadcast
 
-# deploy the Arc settlement receiver (GUARD env = guard address)
-deploy-arc guard sender:
+# deploy the settlement receiver (ArcSettlementReceiver) to a network
+deploy-receiver network guard sender:
     GUARD={{guard}} forge script script/DeployArc.s.sol:DeployArc \
-        --rpc-url arc_testnet --account {{account}} --sender {{sender}} --broadcast
+        --rpc-url {{network}} --account {{account}} --sender {{sender}} --broadcast
 
 # deploy the CRE policy consumer and wire it (GUARD + CRE_FORWARDER env)
 # arc-testnet forwarder: 0x76c9cf548b4179F8901cda1f8623568b58215E62
@@ -35,10 +35,16 @@ deploy-cre guard forwarder sender:
     GUARD={{guard}} CRE_FORWARDER={{forwarder}} forge script script/DeployCre.s.sol:DeployCre \
         --rpc-url arc_testnet --account {{account}} --sender {{sender}} --broadcast
 
-# deploy a mock 6-dec USDC on Arc and pre-fund the receiver
-deploy-usdc receiver sender:
+# deploy a mock 6-dec USDC to a network and pre-fund the receiver
+deploy-usdc network receiver sender:
     RECEIVER={{receiver}} forge script script/DeployMockUsdc.s.sol:DeployMockUsdc \
-        --rpc-url arc_testnet --account {{account}} --sender {{sender}} --broadcast
+        --rpc-url {{network}} --account {{account}} --sender {{sender}} --broadcast
+
+# live end-to-end smoke test on any network. env: GUARD, RECEIVER, TOKEN, AUTHORITY_PK
+# (CONSUMER, RECIPIENT, VALUE, SRC_ID optional)
+smoke network sender:
+    forge script script/SmokeArc.s.sol:SmokeArc \
+        --rpc-url {{network}} --account {{account}} --sender {{sender}} --broadcast
 
 # live end-to-end smoke test of the Arc deployment (needs AUTHORITY_PK env)
 smoke-arc sender:
