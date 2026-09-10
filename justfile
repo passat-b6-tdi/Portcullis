@@ -46,6 +46,12 @@ smoke network sender:
     forge script script/SmokeArc.s.sol:SmokeArc \
         --rpc-url {{network}} --account {{account}} --sender {{sender}} --broadcast
 
+# fire 10 varied settlements (PASS/EXPIRED/BOUNDS/BINDING/NONCE_GAP/REPLAY) for the
+# dashboard feed. env: GUARD, RECEIVER, TOKEN, AUTHORITY_PK (SRC_ID, RECIPIENT opt)
+seed-feed network sender:
+    forge script script/SeedFeed.s.sol:SeedFeed \
+        --rpc-url {{network}} --account {{account}} --sender {{sender}} --broadcast
+
 # live end-to-end smoke test of the Arc deployment (needs AUTHORITY_PK env)
 smoke-arc sender:
     GUARD=0x100FEb2D822CBb32C4e8f047D43615AC8851Ed79 \
