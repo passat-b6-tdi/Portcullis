@@ -9,17 +9,20 @@ import { IPreSettlementPolicy } from "../contracts/core/interfaces/IPreSettlemen
 contract ConfigureGuard is Script {
     function run() external {
         PortcullisGuard guard = PortcullisGuard(vm.envAddress("GUARD"));
-        AddressBookRegistry registry = AddressBookRegistry(vm.envAddress("REGISTRY"));
+        address registry = vm.envOr("REGISTRY", address(0));
+        address authority = vm.envOr("SRC_AUTHORITY", address(0));
 
         bytes32 srcId = vm.envOr("SRC_ID", keccak256("treasury.acme.portcullis.eth"));
-        address authority = vm.envAddress("SRC_AUTHORITY");
         address adapter = vm.envOr("ADAPTER", address(0));
         address policy = vm.envOr("POLICY", address(0));
         address allowToken = vm.envOr("ALLOW_TOKEN", address(0));
         uint8 allowTokenDecimals = uint8(vm.envOr("ALLOW_TOKEN_DECIMALS", uint256(6)));
 
         vm.startBroadcast();
-        registry.setAuthority(srcId, authority);
+        if (registry != address(0)) {
+            require(authority != address(0), "SRC_AUTHORITY required with REGISTRY");
+            AddressBookRegistry(registry).setAuthority(srcId, authority);
+        }
         if (guard.isGuardian(msg.sender)) {
             guard.setEnrolled(srcId, true);
             if (allowToken != address(0)) guard.setAllowedToken(allowToken, true, allowTokenDecimals);
