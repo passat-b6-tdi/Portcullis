@@ -1,0 +1,14 @@
+[build]
+  command = "next build"
+  publish = "out"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NEXT_PUBLIC_PRIVY_APP_ID = "cmtvh6287003u0cjprje5z91j"
+  NEXT_PUBLIC_GUARD_ADDRESS = "0xE59474b146d750022c5E3C9376d74D0Ca31D7008"
+  NEXT_PUBLIC_RECEIVER_ADDRESS = "0x48a04458bB4EaaD6D4902D30fFd8C20B6D2c55B9"
+  NEXT_PUBLIC_SUBGRAPH_URL = "https://api.studio.thegraph.com/query/59239/portcullis/latest"
+  NEXT_PUBLIC_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com"
+  NEXT_PUBLIC_CHAIN_ID = "11155111"
+  NEXT_PUBLIC_EXPLORER = "https://sepolia.etherscan.io"
+
