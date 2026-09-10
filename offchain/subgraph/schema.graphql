@@ -1,5 +1,6 @@
 type Settlement @entity(immutable: true) {
   id: Bytes!
+  messageId: Bytes!
   srcId: Bytes!
   recipient: Bytes!
   token: Bytes!

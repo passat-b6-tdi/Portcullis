@@ -24,7 +24,8 @@ function evId(event: ethereum.Event): Bytes {
 }
 
 export function handleSettlementInspected(event: SettlementInspected): void {
-  const s = new Settlement(event.params.messageId);
+  const s = new Settlement(evId(event));
+  s.messageId = event.params.messageId;
   s.srcId = event.params.srcId;
   s.recipient = event.params.recipient;
   s.token = event.params.token;
