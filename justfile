@@ -40,6 +40,15 @@ deploy-usdc receiver sender:
     RECEIVER={{receiver}} forge script script/DeployMockUsdc.s.sol:DeployMockUsdc \
         --rpc-url arc_testnet --account {{account}} --sender {{sender}} --broadcast
 
+# live end-to-end smoke test of the Arc deployment (needs AUTHORITY_PK env)
+smoke-arc sender:
+    GUARD=0x100FEb2D822CBb32C4e8f047D43615AC8851Ed79 \
+    RECEIVER=0x21e633FAE68838d3B517EBE72f4d01b18dC2b815 \
+    TOKEN=0xf36BE8463c25e9AA235185dfbe344Fc486Ba7889 \
+    CONSUMER=0xCAD48E5C29A0d243e7Fd5d56dEf0a6802B45f104 \
+        forge script script/SmokeArc.s.sol:SmokeArc \
+        --rpc-url arc_testnet --account {{account}} --sender {{sender}} --broadcast
+
 # deploy the ENSv2 identity registry to Sepolia
 deploy-ens sender:
     forge script script/DeployEns.s.sol:DeployEns \
