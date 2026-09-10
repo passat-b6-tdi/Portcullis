@@ -5,6 +5,6 @@
   "sanctionsSecretId": "SANCTIONS_API_KEY",
   "velocityMaxCount": 20,
   "velocityMaxValueWei": "5000000000000000000000000",
-  "guardAddress": "0x0000000000000000000000000000000000000000",
+  "guardAddress": "0x100FEb2D822CBb32C4e8f047D43615AC8851Ed79",
   "chainId": 5042002
 }
