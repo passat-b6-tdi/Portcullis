@@ -1,0 +1,72 @@
+type Settlement @entity(immutable: true) {
+  id: Bytes!
+  srcId: Bytes!
+  recipient: Bytes!
+  token: Bytes!
+  value: BigInt!
+  cleared: Boolean!
+  reason: String!
+  detectorMask: Int!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  txHash: Bytes!
+}
+
+type SentinelEvent @entity(immutable: true) {
+  id: Bytes!
+  kind: String!
+  reason: String
+  messageId: Bytes
+  actor: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  txHash: Bytes!
+}
+
+type Payout @entity(immutable: true) {
+  id: Bytes!
+  messageId: Bytes!
+  recipient: Bytes!
+  token: Bytes!
+  value: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  txHash: Bytes!
+}
+
+type Rejection @entity(immutable: true) {
+  id: Bytes!
+  messageId: Bytes!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  txHash: Bytes!
+}
+
+type GuardConfig @entity(immutable: false) {
+  id: ID!
+  minValue: BigInt
+  maxValue: BigInt
+  rateCapacity: BigInt
+  rateRefillPerSec: BigInt
+  volumeOracle: Bytes
+  spikeFactorBps: BigInt
+  warmup: BigInt
+  policy: Bytes
+  guardian: Bytes
+  paused: Boolean!
+  lastReason: String
+  updatedAt: BigInt!
+}
+
+type Source @entity(immutable: false) {
+  id: Bytes!
+  enrolled: Boolean!
+  updatedAt: BigInt!
+}
+
+type AllowedToken @entity(immutable: false) {
+  id: Bytes!
+  allowed: Boolean!
+  decimals: Int!
+  updatedAt: BigInt!
+}

@@ -1,0 +1,22 @@
+{
+  "sepolia": {
+    "PortcullisGuard": {
+      "address": "0xE59474b146d750022c5E3C9376d74D0Ca31D7008",
+      "startBlock": 11674746
+    },
+    "SettlementReceiver": {
+      "address": "0x48a04458bB4EaaD6D4902D30fFd8C20B6D2c55B9",
+      "startBlock": 11674752
+    }
+  },
+  "arc-testnet": {
+    "PortcullisGuard": {
+      "address": "0x100FEb2D822CBb32C4e8f047D43615AC8851Ed79",
+      "startBlock": 0
+    },
+    "SettlementReceiver": {
+      "address": "0x21e633FAE68838d3B517EBE72f4d01b18dC2b815",
+      "startBlock": 0
+    }
+  }
+}

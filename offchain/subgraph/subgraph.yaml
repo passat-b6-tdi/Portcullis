@@ -1,0 +1,72 @@
+specVersion: 1.2.0
+description: Portcullis — cross-chain settlement firewall. Indexes guard
+  verdicts, circuit-breaker transitions, payouts and rejections.
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: PortcullisGuard
+    network: sepolia
+    source:
+      abi: PortcullisGuard
+      address: "0xE59474b146d750022c5E3C9376d74D0Ca31D7008"
+      startBlock: 11674746
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/guard.ts
+      entities:
+        - Settlement
+        - SentinelEvent
+        - GuardConfig
+        - Source
+        - AllowedToken
+      abis:
+        - name: PortcullisGuard
+          file: ./abis/PortcullisGuard.json
+      eventHandlers:
+        - event: SettlementInspected(indexed bytes32,indexed
+            bytes32,address,address,uint256,bool,uint8,uint8)
+          handler: handleSettlementInspected
+        - event: SentinelTripped(uint8,indexed bytes32,indexed address)
+          handler: handleSentinelTripped
+        - event: SentinelCleared(indexed address)
+          handler: handleSentinelCleared
+        - event: BoundsSet(uint256,uint256)
+          handler: handleBoundsSet
+        - event: RateSet(uint256,uint256)
+          handler: handleRateSet
+        - event: VolumePolicySet(indexed address,uint256,uint256)
+          handler: handleVolumePolicySet
+        - event: PolicySet(indexed address)
+          handler: handlePolicySet
+        - event: GuardianTransferred(indexed address,indexed address)
+          handler: handleGuardianTransferred
+        - event: SourceEnrolled(indexed bytes32,bool)
+          handler: handleSourceEnrolled
+        - event: TokenAllowed(indexed address,bool,uint8)
+          handler: handleTokenAllowed
+  - kind: ethereum
+    name: SettlementReceiver
+    network: sepolia
+    source:
+      abi: ArcSettlementReceiver
+      address: "0x48a04458bB4EaaD6D4902D30fFd8C20B6D2c55B9"
+      startBlock: 11674752
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      file: ./src/receiver.ts
+      entities:
+        - Payout
+        - Rejection
+      abis:
+        - name: ArcSettlementReceiver
+          file: ./abis/ArcSettlementReceiver.json
+      eventHandlers:
+        - event: SettlementPaid(indexed bytes32,indexed address,address,uint256)
+          handler: handleSettlementPaid
+        - event: SettlementRejected(indexed bytes32)
+          handler: handleSettlementRejected
