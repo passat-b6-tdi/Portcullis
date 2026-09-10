@@ -1,0 +1,10 @@
+{
+  "schedule": "0 */1 * * * *",
+  "pendingUrl": "http://localhost:4600/policy/pending",
+  "sanctionsUrl": "http://localhost:4600/policy/sanctions",
+  "sanctionsSecretId": "SANCTIONS_API_KEY",
+  "velocityMaxCount": 20,
+  "velocityMaxValueWei": "5000000000000000000000000",
+  "guardAddress": "0x0000000000000000000000000000000000000000",
+  "chainId": 421614
+}
