@@ -18,9 +18,14 @@ contract DeployCore is Script {
         uint256 spikeFactorBps = vm.envOr("SPIKE_FACTOR_BPS", uint256(30_000));
         uint256 warmup = vm.envOr("VOLUME_WARMUP", uint256(10));
 
+        address identity = vm.envOr("IDENTITY", address(0));
+
         vm.startBroadcast();
-        registry = new AddressBookRegistry(deployer);
-        guard = new PortcullisGuard(deployer, deployer, address(registry));
+        if (identity == address(0)) {
+            registry = new AddressBookRegistry(deployer);
+            identity = address(registry);
+        }
+        guard = new PortcullisGuard(deployer, deployer, identity);
 
         guard.setBounds(minValue, maxValue);
         guard.setRate(rateCapacity, rateRefill);
@@ -28,11 +33,11 @@ contract DeployCore is Script {
 
         if (guardian != deployer) {
             guard.transferGuardian(guardian);
-            registry.transferOwnership(guardian);
+            if (address(registry) != address(0)) registry.transferOwnership(guardian);
         }
         vm.stopBroadcast();
 
-        console2.log("AddressBookRegistry:", address(registry));
+        console2.log("identity registry:  ", identity);
         console2.log("PortcullisGuard:    ", address(guard));
         console2.log("guardian:           ", guardian);
     }
