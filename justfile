@@ -54,9 +54,19 @@ deploy-ens sender:
     forge script script/DeployEns.s.sol:DeployEns \
         --rpc-url sepolia --account {{account}} --sender {{sender}} --broadcast
 
-# configure a source on the guard. env: GUARD, REGISTRY, SRC_AUTHORITY (required)
-# ALLOW_TOKEN + ALLOW_TOKEN_DECIMALS, ADAPTER, POLICY, SRC_ID (optional)
-configure guard registry authority sender:
-    GUARD={{guard}} REGISTRY={{registry}} SRC_AUTHORITY={{authority}} \
+# offline: NAME=treasury.acme.eth -> namehash (ENS_NODE) + DNS wire (ENS_DNS_NAME)
+ens-encode name:
+    NAME={{name}} forge script script/EnsTools.s.sol:DnsEncode
+
+# read-only: prove ENSv2 resolution via UniversalResolverV2 (REGISTRY + ENS_NODE env)
+ens-resolve registry node:
+    REGISTRY={{registry}} ENS_NODE={{node}} forge script script/EnsTools.s.sol:ResolveEns \
+        --rpc-url sepolia
+
+# configure a source on the guard. env: GUARD (required)
+# AddressBook path: REGISTRY + SRC_AUTHORITY. ENS path: leave both unset, pass SRC_ID = ENS namehash.
+# optional env: ALLOW_TOKEN + ALLOW_TOKEN_DECIMALS, ADAPTER, POLICY, SRC_ID
+configure network guard sender:
+    GUARD={{guard}} \
         forge script script/ConfigureGuard.s.sol:ConfigureGuard \
-        --rpc-url arc_testnet --account {{account}} --sender {{sender}} --broadcast
+        --rpc-url {{network}} --account {{account}} --sender {{sender}} --broadcast
