@@ -33,7 +33,7 @@ bracket_spacing = true
 int_types = "long"
 
 [rpc_endpoints]
-arc_testnet = "https://rpc.testnet.arc.network"
+arc_testnet = "https://arc-testnet.rpc.thirdweb.com"
 sepolia = "https://ethereum-sepolia-rpc.publicnode.com"
 
 [etherscan]
