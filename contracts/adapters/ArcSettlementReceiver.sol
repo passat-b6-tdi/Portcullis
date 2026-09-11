@@ -6,13 +6,22 @@ import { GuardedReceiver } from "./GuardedReceiver.sol";
 import { PortcullisGuard } from "../core/PortcullisGuard.sol";
 import { SettlementMessage } from "../core/types/GuardTypes.sol";
 
+/// @title Guarded receiver that settles approved ERC-20 messages with a direct token transfer.
 contract ArcSettlementReceiver is GuardedReceiver {
     using SafeTransferLib for address;
 
+    /// @notice Emitted after an approved settlement token transfer succeeds.
+    /// @param messageId Digest of the paid settlement.
+    /// @param recipient Recipient of the transferred tokens.
+    /// @param token ERC-20 token transferred from this receiver.
+    /// @param value Token-native amount transferred.
     event SettlementPaid(bytes32 indexed messageId, address indexed recipient, address token, uint256 value);
 
+    /// @notice Initializes the receiver with its Portcullis guard.
+    /// @param guard_ Guard that authorizes inbound settlement messages.
     constructor(PortcullisGuard guard_) GuardedReceiver(guard_) { }
 
+    /// @inheritdoc GuardedReceiver
     function _decode(bytes calldata wire)
         internal
         pure
@@ -22,6 +31,7 @@ contract ArcSettlementReceiver is GuardedReceiver {
         (m, proof) = abi.decode(wire, (SettlementMessage, bytes));
     }
 
+    /// @inheritdoc GuardedReceiver
     function _handleValidated(SettlementMessage memory m) internal override {
         m.token.safeTransfer(m.recipient, m.value);
         emit SettlementPaid(guard.digestOf(m), m.recipient, m.token, m.value);
