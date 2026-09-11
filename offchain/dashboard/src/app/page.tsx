@@ -199,6 +199,15 @@ export default function Page() {
             indexing errors
           </span>
         ) : null}
+        <a
+          href="https://b0gdaniy.gitbook.io/portcullis-guard"
+          target="_blank"
+          rel="noreferrer"
+          className="ml-auto inline-flex items-center gap-1 text-low hover:text-hi"
+        >
+          docs
+          <External width={11} height={11} />
+        </a>
       </footer>
     </main>
   );
