@@ -1,0 +1,13 @@
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+
+site:
+  title: Portcullis
+
+structure:
+  - type: space
+    key: space-portcullis
+    title: Portcullis
+    path: docs
+    default: true
+    content:
+      directory: ./
