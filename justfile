@@ -15,13 +15,13 @@ test:
 fmt:
     forge fmt
 
-# build the NatSpec reference book into docs/book (gitignored, regenerate on demand)
+# regenerate docs/contracts/ from NatSpec; committed and synced by GitBook
 docs:
-    forge doc --build
-
-# serve the reference book locally and open it in a browser
-docs-serve:
-    forge doc --build --serve --open
+    rm -rf .forge-doc-scratch docs/contracts
+    forge doc -o .forge-doc-scratch
+    mkdir -p docs/contracts
+    cp -r .forge-doc-scratch/src/contracts/. docs/contracts/
+    rm -rf .forge-doc-scratch
 
 demo:
     forge script script/Demo.s.sol
