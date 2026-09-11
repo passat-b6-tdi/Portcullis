@@ -18,10 +18,12 @@ contract ArcSettlementReceiver is GuardedReceiver {
     event SettlementPaid(bytes32 indexed messageId, address indexed recipient, address token, uint256 value);
 
     /// @notice Initializes the receiver with its Portcullis guard.
+    /// @dev The guard address is immutable through the inherited constructor.
     /// @param guard_ Guard that authorizes inbound settlement messages.
     constructor(PortcullisGuard guard_) GuardedReceiver(guard_) { }
 
     /// @inheritdoc GuardedReceiver
+    /// @dev Decodes the wire as an ABI tuple of SettlementMessage and proof.
     function _decode(bytes calldata wire)
         internal
         pure
@@ -32,6 +34,7 @@ contract ArcSettlementReceiver is GuardedReceiver {
     }
 
     /// @inheritdoc GuardedReceiver
+    /// @dev Transfers the approved token only after the guard has committed acceptance state.
     function _handleValidated(SettlementMessage memory m) internal override {
         m.token.safeTransfer(m.recipient, m.value);
         emit SettlementPaid(guard.digestOf(m), m.recipient, m.token, m.value);

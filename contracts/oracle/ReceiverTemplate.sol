@@ -42,6 +42,7 @@ abstract contract ReceiverTemplate is IReceiver {
     }
 
     /// @notice Validates the report sender and dispatches the report payload to the implementation.
+    /// @inheritdoc IReceiver
     /// @dev Reverts with InvalidSender unless msg.sender is _forwarder; metadata is intentionally ignored.
     /// @param report Report payload for _processReport.
     function onReport(bytes calldata, bytes calldata report) external virtual override {

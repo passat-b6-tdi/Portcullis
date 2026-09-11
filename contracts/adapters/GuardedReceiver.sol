@@ -15,6 +15,7 @@ abstract contract GuardedReceiver {
     PortcullisGuard public immutable guard;
 
     /// @notice Sets the guard used by this receiver.
+    /// @dev The guard is immutable after construction.
     /// @param guard_ PortcullisGuard that must approve each decoded message.
     constructor(PortcullisGuard guard_) {
         guard = guard_;
@@ -39,6 +40,7 @@ abstract contract GuardedReceiver {
     function _decode(bytes calldata wire) internal view virtual returns (SettlementMessage memory m, bytes memory proof);
 
     /// @notice Performs the adapter-specific action for a guard-approved settlement.
+    /// @dev Called only after inspect has returned true and committed guard state.
     /// @param m Settlement that has passed inspection and whose guard state has been committed.
     function _handleValidated(SettlementMessage memory m) internal virtual;
 }
