@@ -32,6 +32,10 @@ tab_width = 4
 bracket_spacing = true
 int_types = "long"
 
+[doc]
+title = "Portcullis Contract Reference"
+repository = "https://github.com/passat-b6-tdi/Portcullis"
+
 [rpc_endpoints]
 arc_testnet = "https://arc-testnet.rpc.thirdweb.com"
 sepolia = "https://ethereum-sepolia-rpc.publicnode.com"

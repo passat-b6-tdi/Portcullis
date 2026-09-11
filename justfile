@@ -15,6 +15,14 @@ test:
 fmt:
     forge fmt
 
+# build the NatSpec reference book into docs/book (gitignored, regenerate on demand)
+docs:
+    forge doc --build
+
+# serve the reference book locally and open it in a browser
+docs-serve:
+    forge doc --build --serve --open
+
 demo:
     forge script script/Demo.s.sol
 
