@@ -217,6 +217,15 @@ export default function Page() {
           github.io
           <External width={11} height={11} />
         </a>
+        <a
+          href="https://github.com/passat-b6-tdi/Portcullis"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-low hover:text-hi"
+        >
+          repo
+          <External width={11} height={11} />
+        </a>
       </footer>
     </main>
   );
