@@ -1,7 +1,7 @@
 {
   "schedule": "0 */1 * * * *",
-  "pendingUrl": "http://localhost:4600/policy/pending",
-  "sanctionsUrl": "http://localhost:4600/policy/sanctions",
+  "pendingUrl": "https://portcullis.b0gdaniy.xyz/.netlify/functions/policy-pending",
+  "sanctionsUrl": "https://portcullis.b0gdaniy.xyz/.netlify/functions/policy-sanctions",
   "sanctionsSecretId": "SANCTIONS_API_KEY",
   "velocityMaxCount": 20,
   "velocityMaxValueWei": "5000000000000000000000000",

@@ -2,6 +2,9 @@
   command = "next build"
   publish = "out"
 
+[functions]
+  directory = "netlify/functions"
+
 [build.environment]
   NODE_VERSION = "20"
   NEXT_PUBLIC_PRIVY_APP_ID = "cmtvh6287003u0cjprje5z91j"

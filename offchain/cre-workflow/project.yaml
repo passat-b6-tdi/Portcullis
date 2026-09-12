@@ -2,3 +2,5 @@ staging-settings:
   rpcs:
     - chain-name: arc-testnet
       url: https://arc-testnet.rpc.thirdweb.com
+    - chain-name: ethereum-mainnet
+      url: https://eth.llamarpc.com
