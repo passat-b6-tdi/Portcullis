@@ -3,4 +3,5 @@ node_modules/
 .cre_build_tmp*
 .workflow-temp-*
 *.wasm
+*.wasm.br.b64
 dist/
