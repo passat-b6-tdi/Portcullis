@@ -3,6 +3,7 @@
 * [Overview](README.md)
 * [Deployments](deployments.md)
 * [Security model and invariants](security-notes.md)
+* [Integration spikes](spikes.md)
 
 ## Contract reference
 

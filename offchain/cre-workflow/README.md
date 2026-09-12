@@ -28,23 +28,21 @@ keep credentials out of the repository.
 ## Deployment
 
 `policy/config.staging.json` points `pendingUrl`/`sanctionsUrl` at
-`https://passat-b6-tdi.github.io/Portcullis/mock/policy-{pending,sanctions}.json`,
-not `localhost` — a deployed workflow runs on DON nodes in Chainlink's
-infrastructure, which cannot reach the local mock server used for
-`cre workflow simulate`. Those two static JSON files (`docs/mock/`) serve the
-same fake settlement data as `policy/mock-server.js`, published for free
-through the repository's own GitHub Pages site (`docs/`), so there is no
-separate hosting account or billing dependency. Static hosting can't check
-an `Authorization` header, so unlike the local mock server these endpoints
-are unauthenticated — the workflow still sends
-`Authorization: Bearer <SECRET_SANCTIONS_API_KEY>`, the static host just
-ignores it. This is fine because the underlying data is fake demo data, not
-a real sanctions list.
+`https://passat-b6-tdi.github.io/Portcullis/mock/policy-{pending,sanctions}.json`.
+A deployed workflow runs on DON nodes in Chainlink's infrastructure and cannot
+reach the local mock server used for `cre workflow simulate`. The two static
+JSON files in `docs/mock/` serve the same fake settlement data as
+`policy/mock-server.js`. They are published through the repository's GitHub
+Pages site (`docs/`), with no separate hosting account or billing dependency.
+Static hosting cannot check an `Authorization` header. These endpoints are
+unauthenticated, while the workflow still sends
+`Authorization: Bearer <SECRET_SANCTIONS_API_KEY>` and the static host ignores
+it. The underlying data is fake demo data, not a real sanctions list.
 
 An earlier iteration served these from Netlify Functions on the dashboard's
-own site (`offchain/dashboard/netlify/functions/`) — that path is still
-there and works once/if the Netlify team's production deploys are
-unpaused, but GitHub Pages is the deploy target while they're paused.
+own site (`offchain/dashboard/netlify/functions/`). That path remains and
+works once the Netlify team's production deploys are unpaused. GitHub Pages is
+the deploy target while they are paused.
 
 ```bash
 cre workflow deploy ./policy --target=staging-settings --env ./.env
