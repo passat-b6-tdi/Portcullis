@@ -5,4 +5,3 @@ src = "."
 
 [output.html]
 git-repository-url = "https://github.com/passat-b6-tdi/Portcullis"
-git-repository-icon = "fa-github"
