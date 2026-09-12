@@ -52,7 +52,10 @@ workflow itself executes against Arc testnet, evaluating settlements for
 The workflow polls the fake pending-settlement and sanctions data at
 `docs/mock/` (served over GitHub Pages, see `offchain/cre-workflow/README.md`)
 every minute inside a TEE and reports a verdict to `CrePolicyConsumer` on
-Arc.
+Arc. Confirmed running: execution `54066a23…e2` completed successfully at
+2026-09-12 18:19 UTC (both HTTP fetches and both consensus reports
+succeeded, `cre execution events`), and subsequent minute-cadence runs
+continue succeeding.
 
 ## Dashboard
 
