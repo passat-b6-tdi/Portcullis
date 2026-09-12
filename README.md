@@ -54,7 +54,8 @@ the state and events of the Sepolia deployment.
 ## Contracts and guarantees
 
 The contract reference is in [`docs/contracts/`](docs/contracts/README.md), also
-published at [b0gdaniy.gitbook.io/portcullis-guard](https://b0gdaniy.gitbook.io/portcullis-guard).
+published at [b0gdaniy.gitbook.io/portcullis-guard](https://b0gdaniy.gitbook.io/portcullis-guard)
+and [passat-b6-tdi.github.io/Portcullis](https://passat-b6-tdi.github.io/Portcullis/).
 The security model, trust boundaries, and invariants are in
 [`docs/security-notes.md`](docs/security-notes.md).
 

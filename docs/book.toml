@@ -1,0 +1,8 @@
+[book]
+title = "Portcullis"
+description = "Guard for inbound cross-chain settlements"
+src = "."
+
+[output.html]
+git-repository-url = "https://github.com/passat-b6-tdi/Portcullis"
+git-repository-icon = "fa-github"
