@@ -1,5 +1,7 @@
 # Portcullis
 
+[Source on GitHub](https://github.com/passat-b6-tdi/Portcullis)
+
 Portcullis is a guard for inbound cross-chain settlements. A settlement adapter
 asks `PortcullisGuard` to inspect every message before it transfers a token to a
 recipient. The guard is intended for operators who need independent controls at

@@ -24,3 +24,28 @@ cre workflow simulate ./policy --target=staging-settings --env ./.env
 
 Run `bun test` from `policy/` for the workflow tests. `.env` is local-only;
 keep credentials out of the repository.
+
+## Deployment
+
+`policy/config.staging.json` points `pendingUrl`/`sanctionsUrl` at
+`https://passat-b6-tdi.github.io/Portcullis/mock/policy-{pending,sanctions}.json`,
+not `localhost` — a deployed workflow runs on DON nodes in Chainlink's
+infrastructure, which cannot reach the local mock server used for
+`cre workflow simulate`. Those two static JSON files (`docs/mock/`) serve the
+same fake settlement data as `policy/mock-server.js`, published for free
+through the repository's own GitHub Pages site (`docs/`), so there is no
+separate hosting account or billing dependency. Static hosting can't check
+an `Authorization` header, so unlike the local mock server these endpoints
+are unauthenticated — the workflow still sends
+`Authorization: Bearer <SECRET_SANCTIONS_API_KEY>`, the static host just
+ignores it. This is fine because the underlying data is fake demo data, not
+a real sanctions list.
+
+An earlier iteration served these from Netlify Functions on the dashboard's
+own site (`offchain/dashboard/netlify/functions/`) — that path is still
+there and works once/if the Netlify team's production deploys are
+unpaused, but GitHub Pages is the deploy target while they're paused.
+
+```bash
+cre workflow deploy ./policy --target=staging-settings --env ./.env
+```

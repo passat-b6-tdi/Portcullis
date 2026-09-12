@@ -97,8 +97,10 @@ can be overridden with public `NEXT_PUBLIC_*` variables described in
 
 ## Live deployments and transactions
 
-Addresses, deployment transactions, smoke transactions, and the public
-subgraph query endpoint are listed in [`docs/deployments.md`](docs/deployments.md).
+The public guardian dashboard is at
+[portcullis.b0gdaniy.xyz](https://portcullis.b0gdaniy.xyz). Addresses,
+deployment transactions, smoke transactions, and the public subgraph query
+endpoint are listed in [`docs/deployments.md`](docs/deployments.md).
 
 ## Testing
 
