@@ -3,4 +3,4 @@ staging-settings:
     - chain-name: arc-testnet
       url: https://arc-testnet.rpc.thirdweb.com
     - chain-name: ethereum-mainnet
-      url: https://eth.merkle.io
+      url: https://ethereum.publicnode.com

@@ -34,6 +34,26 @@ The Arc receipt files are available in `broadcast/Deploy*.s.sol/5042002/`.
 The public RPC configured for this repository is
 `https://arc-testnet.rpc.thirdweb.com`.
 
+## Chainlink CRE policy workflow
+
+`portcullis-policy-staging` is deployed to the CRE Workflow Registry on
+Ethereum mainnet (registry is the ownership/registration ledger; the
+workflow itself executes against Arc testnet, evaluating settlements for
+`CrePolicyConsumer` there). Deploy transaction:
+[`0x1638…9a8d3`](https://etherscan.io/tx/0x1638764a552badca5e1d6364478c722bfb2d9ebedfe94b772ca3533515d9a8d3).
+
+| Field | Value |
+| --- | --- |
+| Workflow ID | `005b50e9b3847b16405663ce6d1dc5f29583a97c21341bbd399c701c30c81275` |
+| Registry contract | `0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5` (ethereum-mainnet) |
+| DON family | `zone-a` |
+| Owner | `0x811AE8434b584dfde82C14102820570611d47A59` |
+
+The workflow polls the fake pending-settlement and sanctions data at
+`docs/mock/` (served over GitHub Pages, see `offchain/cre-workflow/README.md`)
+every minute inside a TEE and reports a verdict to `CrePolicyConsumer` on
+Arc.
+
 ## Dashboard
 
 The public dashboard reads the Sepolia guard and subgraph:
